@@ -25,10 +25,10 @@ POST /api/v1/auth/logout
 ```http
 POST  /api/v1/admin/tenants
 GET   /api/v1/admin/tenants
-GET   /api/v1/admin/tenants/{id}
-PUT   /api/v1/admin/tenants/{id}
-PATCH /api/v1/admin/tenants/{id}/suspender
-PATCH /api/v1/admin/tenants/{id}/ativar
+GET   /api/v1/admin/tenants/{publicId}
+PUT   /api/v1/admin/tenants/{publicId}
+PATCH /api/v1/admin/tenants/{publicId}/suspender
+PATCH /api/v1/admin/tenants/{publicId}/ativar
 ```
 
 Sem hard delete.
@@ -40,10 +40,10 @@ Sem hard delete.
 ```http
 POST  /api/v1/unidades
 GET   /api/v1/unidades
-GET   /api/v1/unidades/{id}
-PUT   /api/v1/unidades/{id}
-PATCH /api/v1/unidades/{id}/ativar
-PATCH /api/v1/unidades/{id}/desativar
+GET   /api/v1/unidades/{publicId}
+PUT   /api/v1/unidades/{publicId}
+PATCH /api/v1/unidades/{publicId}/ativar
+PATCH /api/v1/unidades/{publicId}/desativar
 ```
 
 ---
@@ -53,11 +53,11 @@ PATCH /api/v1/unidades/{id}/desativar
 ```http
 POST  /api/v1/usuarios
 GET   /api/v1/usuarios
-GET   /api/v1/usuarios/{id}
-PUT   /api/v1/usuarios/{id}
-PATCH /api/v1/usuarios/{id}/bloquear
-PATCH /api/v1/usuarios/{id}/ativar
-PATCH /api/v1/usuarios/{id}/perfil
+GET   /api/v1/usuarios/{publicId}
+PUT   /api/v1/usuarios/{publicId}
+PATCH /api/v1/usuarios/{publicId}/bloquear
+PATCH /api/v1/usuarios/{publicId}/ativar
+PATCH /api/v1/usuarios/{publicId}/perfil
 ```
 
 Criação deve gerar/ligar `Usuario`, `Pessoa` e `UsuarioTenant` conforme payload.
@@ -69,21 +69,21 @@ Criação deve gerar/ligar `Usuario`, `Pessoa` e `UsuarioTenant` conforme payloa
 ```http
 POST  /api/v1/profissionais
 GET   /api/v1/profissionais
-GET   /api/v1/profissionais/{id}
-PUT   /api/v1/profissionais/{id}
-PATCH /api/v1/profissionais/{id}/ativar
-PATCH /api/v1/profissionais/{id}/desativar
+GET   /api/v1/profissionais/{publicId}
+PUT   /api/v1/profissionais/{publicId}
+PATCH /api/v1/profissionais/{publicId}/ativar
+PATCH /api/v1/profissionais/{publicId}/desativar
 ```
 
 Vínculos:
 
 ```http
-POST   /api/v1/profissionais/{id}/unidades/{unidadeId}
-DELETE /api/v1/profissionais/{id}/unidades/{unidadeId}
-POST   /api/v1/profissionais/{id}/especialidades/{especialidadeId}
-DELETE /api/v1/profissionais/{id}/especialidades/{especialidadeId}
-POST   /api/v1/profissionais/{id}/procedimentos/{procedimentoId}
-DELETE /api/v1/profissionais/{id}/procedimentos/{procedimentoId}
+POST   /api/v1/profissionais/{publicId}/unidades/{unidadePublicId}
+DELETE /api/v1/profissionais/{publicId}/unidades/{unidadePublicId}
+POST   /api/v1/profissionais/{publicId}/especialidades/{especialidadePublicId}
+DELETE /api/v1/profissionais/{publicId}/especialidades/{especialidadePublicId}
+POST   /api/v1/profissionais/{publicId}/procedimentos/{procedimentoPublicId}
+DELETE /api/v1/profissionais/{publicId}/procedimentos/{procedimentoPublicId}
 ```
 
 ---
@@ -93,7 +93,7 @@ DELETE /api/v1/profissionais/{id}/procedimentos/{procedimentoId}
 ```http
 POST /api/v1/especialidades
 GET  /api/v1/especialidades
-PUT  /api/v1/especialidades/{id}
+PUT  /api/v1/especialidades/{publicId}
 ```
 
 Ativar/desativar conforme necessidade.
@@ -105,8 +105,8 @@ Ativar/desativar conforme necessidade.
 ```http
 POST /api/v1/procedimentos
 GET  /api/v1/procedimentos
-GET  /api/v1/procedimentos/{id}
-PUT  /api/v1/procedimentos/{id}
+GET  /api/v1/procedimentos/{publicId}
+PUT  /api/v1/procedimentos/{publicId}
 ```
 
 ---
@@ -116,10 +116,10 @@ PUT  /api/v1/procedimentos/{id}
 ```http
 POST  /api/v1/pacientes
 GET   /api/v1/pacientes
-GET   /api/v1/pacientes/{id}
-PUT   /api/v1/pacientes/{id}
-PATCH /api/v1/pacientes/{id}/inativar
-PATCH /api/v1/pacientes/{id}/ativar
+GET   /api/v1/pacientes/{publicId}
+PUT   /api/v1/pacientes/{publicId}
+PATCH /api/v1/pacientes/{publicId}/inativar
+PATCH /api/v1/pacientes/{publicId}/ativar
 ```
 
 Filtros:
@@ -138,10 +138,10 @@ Paginar listagens desde cedo.
 # Disponibilidade
 
 ```http
-POST   /api/v1/profissionais/{id}/disponibilidades
-GET    /api/v1/profissionais/{id}/disponibilidades
-PUT    /api/v1/profissionais/{id}/disponibilidades/{dispId}
-DELETE /api/v1/profissionais/{id}/disponibilidades/{dispId}
+POST   /api/v1/profissionais/{publicId}/disponibilidades
+GET    /api/v1/profissionais/{publicId}/disponibilidades
+PUT    /api/v1/profissionais/{publicId}/disponibilidades/{disponibilidadePublicId}
+DELETE /api/v1/profissionais/{publicId}/disponibilidades/{disponibilidadePublicId}
 ```
 
 ---
@@ -149,9 +149,9 @@ DELETE /api/v1/profissionais/{id}/disponibilidades/{dispId}
 # Bloqueios
 
 ```http
-POST   /api/v1/profissionais/{id}/bloqueios
-GET    /api/v1/profissionais/{id}/bloqueios
-DELETE /api/v1/profissionais/{id}/bloqueios/{bloqueioId}
+POST   /api/v1/profissionais/{publicId}/bloqueios
+GET    /api/v1/profissionais/{publicId}/bloqueios
+DELETE /api/v1/profissionais/{publicId}/bloqueios/{bloqueioPublicId}
 ```
 
 ---
@@ -159,15 +159,15 @@ DELETE /api/v1/profissionais/{id}/bloqueios/{bloqueioId}
 # Horários disponíveis
 
 ```http
-GET /api/v1/profissionais/{id}/horarios-disponiveis
+GET /api/v1/profissionais/{publicId}/horarios-disponiveis
 ```
 
 Query:
 
 ```text
 data
-unidadeId
-procedimentoId
+unidadePublicId
+procedimentoPublicId
 ```
 
 Resposta simples:
@@ -186,25 +186,25 @@ Resposta simples:
 ```http
 POST  /api/v1/agendamentos
 GET   /api/v1/agendamentos
-GET   /api/v1/agendamentos/{id}
-PATCH /api/v1/agendamentos/{id}/confirmar
-PATCH /api/v1/agendamentos/{id}/cancelar
-PATCH /api/v1/agendamentos/{id}/check-in
-PATCH /api/v1/agendamentos/{id}/marcar-falta
-POST  /api/v1/agendamentos/{id}/reagendar
+GET   /api/v1/agendamentos/{publicId}
+PATCH /api/v1/agendamentos/{publicId}/confirmar
+PATCH /api/v1/agendamentos/{publicId}/cancelar
+PATCH /api/v1/agendamentos/{publicId}/check-in
+PATCH /api/v1/agendamentos/{publicId}/marcar-falta
+POST  /api/v1/agendamentos/{publicId}/reagendar
 ```
 
-Evitar `PUT /agendamentos/{id}` genérico depois que o agendamento entra em fluxo.
+Evitar `PUT /agendamentos/{publicId}` genérico depois que o agendamento entra em fluxo.
 
 ---
 
 # Atendimento
 
 ```http
-POST  /api/v1/agendamentos/{id}/iniciar-atendimento
+POST  /api/v1/agendamentos/{publicId}/iniciar-atendimento
 POST  /api/v1/atendimentos/avulso
-GET   /api/v1/atendimentos/{id}
-PATCH /api/v1/atendimentos/{id}/concluir
+GET   /api/v1/atendimentos/{publicId}
+PATCH /api/v1/atendimentos/{publicId}/concluir
 ```
 
 ---
@@ -212,9 +212,9 @@ PATCH /api/v1/atendimentos/{id}/concluir
 # Evolução clínica
 
 ```http
-POST /api/v1/atendimentos/{id}/evolucoes
-GET  /api/v1/atendimentos/{id}/evolucoes
-POST /api/v1/evolucoes/{id}/retificar
+POST /api/v1/atendimentos/{publicId}/evolucoes
+GET  /api/v1/atendimentos/{publicId}/evolucoes
+POST /api/v1/evolucoes/{publicId}/retificar
 ```
 
 Sem DELETE.
@@ -224,10 +224,10 @@ Sem DELETE.
 # Prontuário
 
 ```http
-GET /api/v1/pacientes/{id}/prontuario
-GET /api/v1/pacientes/{id}/prontuario/atendimentos
-GET /api/v1/pacientes/{id}/prontuario/prescricoes
-GET /api/v1/pacientes/{id}/prontuario/anexos
+GET /api/v1/pacientes/{publicId}/prontuario
+GET /api/v1/pacientes/{publicId}/prontuario/atendimentos
+GET /api/v1/pacientes/{publicId}/prontuario/prescricoes
+GET /api/v1/pacientes/{publicId}/prontuario/anexos
 ```
 
 ---
@@ -235,13 +235,13 @@ GET /api/v1/pacientes/{id}/prontuario/anexos
 # Prescrição
 
 ```http
-POST  /api/v1/atendimentos/{id}/prescricoes
-GET   /api/v1/prescricoes/{id}
-POST  /api/v1/prescricoes/{id}/itens
-PUT   /api/v1/prescricoes/{id}/itens/{itemId}    # somente rascunho
-DELETE /api/v1/prescricoes/{id}/itens/{itemId}   # somente rascunho
-POST  /api/v1/prescricoes/{id}/emitir
-POST  /api/v1/prescricoes/{id}/cancelar
+POST   /api/v1/atendimentos/{publicId}/prescricoes
+GET    /api/v1/prescricoes/{publicId}
+POST   /api/v1/prescricoes/{publicId}/itens
+PUT    /api/v1/prescricoes/{publicId}/itens/{itemPublicId}    # somente rascunho
+DELETE /api/v1/prescricoes/{publicId}/itens/{itemPublicId}   # somente rascunho
+POST   /api/v1/prescricoes/{publicId}/emitir
+POST   /api/v1/prescricoes/{publicId}/cancelar
 ```
 
 Depois de `EMITIDA`, não editar silenciosamente.
@@ -253,11 +253,11 @@ Depois de `EMITIDA`, não editar silenciosamente.
 A API pode continuar orientada ao paciente, mas internamente `AnexoClinico` referencia o Prontuario.
 
 ```http
-POST /api/v1/pacientes/{id}/anexos
-GET  /api/v1/pacientes/{id}/anexos
-POST /api/v1/atendimentos/{id}/anexos
-GET  /api/v1/atendimentos/{id}/anexos
-GET  /api/v1/anexos/{id}/download
+POST /api/v1/pacientes/{publicId}/anexos
+GET  /api/v1/pacientes/{publicId}/anexos
+POST /api/v1/atendimentos/{publicId}/anexos
+GET  /api/v1/atendimentos/{publicId}/anexos
+GET  /api/v1/anexos/{publicId}/download
 ```
 
 O Service resolve:
@@ -286,7 +286,7 @@ GET  /api/v1/me/perfil
 GET  /api/v1/me/consultas
 GET  /api/v1/me/consultas/proximas
 GET  /api/v1/me/prescricoes
-GET  /api/v1/me/prescricoes/{id}
+GET  /api/v1/me/prescricoes/{publicId}
 GET  /api/v1/me/notificacoes
 ```
 
@@ -295,8 +295,8 @@ Autoagendamento pode entrar depois:
 ```http
 GET  /api/v1/me/horarios-disponiveis
 POST /api/v1/me/agendamentos
-POST /api/v1/me/agendamentos/{id}/cancelar
-POST /api/v1/me/agendamentos/{id}/reagendar
+POST /api/v1/me/agendamentos/{publicId}/cancelar
+POST /api/v1/me/agendamentos/{publicId}/reagendar
 ```
 
 ---
@@ -316,7 +316,6 @@ POST /api/v1/me/agendamentos/{id}/reagendar
 11. Evolução finalizada não é sobrescrita.
 12. Prescrição emitida não é editada silenciosamente.
 13. Toda leitura sensível deve ser autorizada e auditada quando definida como crítica.
-
 
 ---
 
@@ -338,7 +337,6 @@ ETAPA 8 → /me operacional
 ETAPA 15 → /me paciente
 ```
 
-
 ---
 
 ## Documentação da API somente após PostgreSQL
@@ -359,3 +357,31 @@ ETAPA 13 → Postman
 ```
 
 Consultar `17_PADROES_HTTP_ERROS_PAGINACAO.md` para manter consistência antes mesmo do Swagger existir.
+
+---
+
+# Referência obrigatória
+
+Consultar `21_PUBLIC_ID_E_CONCORRENCIA.md` para padrão de UUID, lock, overlap e testes concorrentes.
+
+---
+
+# Concorrência na API de agendamento
+
+Duas requisições simultâneas para o mesmo profissional/período:
+
+```text
+requisição A → 201 Created
+requisição B → 409 Conflict
+```
+
+Erro:
+
+```json
+{
+  "code": "AGENDAMENTO_CONFLITO",
+  "message": "O horário acabou de ser reservado por outro paciente."
+}
+```
+
+O cliente deve atualizar os horários disponíveis após receber 409.
