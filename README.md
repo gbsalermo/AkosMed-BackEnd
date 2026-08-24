@@ -1,7 +1,7 @@
 # AkosMed — Documentação Oficial do Backend
 
 **Produto:** AkosMed  
-**Repositório planejado:** `akosmed-backend`  
+**Repositório:** `gbsalermo/AkosMed-BackEnd`  
 **Package base:** `br.com.akosmed`  
 **Escopo atual:** Backend + banco de dados  
 **Arquitetura:** Monólito modular  
@@ -178,4 +178,4 @@ Tenant
 
 Próxima tarefa oficial:
 
-> **ETAPA 0.1 — Criar o repositório `akosmed-backend` e gerar o projeto Spring Boot com H2.**
+> **ETAPA 0.1 — Gerar o projeto Spring Boot com H2 no repositório existente.**
