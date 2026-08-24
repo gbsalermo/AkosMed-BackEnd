@@ -147,6 +147,7 @@ Não criar todas as entities antes de começar os Services.
 | `19_CHECKLIST_REVISAO_QUALIDADE.md` | Checklist para revisar cada etapa |
 | `20_GUIA_USO_IA_PARA_REVISAO.md` | Como usar IA externa como segunda revisão |
 | `21_PUBLIC_ID_E_CONCORRENCIA.md` | Regra oficial de publicId e controle de concorrência |
+| `22_CONCORRENCIA_IDEMPOTENCIA_CLOCK_OPERACAO.md` | Optimistic lock, idempotência, Clock, correlation ID, health, backup e operação |
 
 ---
 
@@ -197,17 +198,9 @@ id Long        → somente banco/backend
 publicId UUID  → API, DTOs, URLs, integrações
 ```
 
-Exemplo:
-
-```http
-GET /api/v1/pacientes/550e8400-e29b-41d4-a716-446655440000
-```
-
 A API nunca deve devolver ou exigir o `Long id`.
 
-## Concorrência
-
-Agendamento é uma operação concorrente.
+## Concorrência de agendamento
 
 Caso crítico:
 
@@ -229,8 +222,35 @@ Proteção:
 ```text
 @Transactional
 → lock pessimista no profissional
+→ revalidar disponibilidade
 → validação de overlap
 → insert
 ```
 
-Na migração para PostgreSQL, adicionar uma constraint de exclusão como segunda barreira.
+Na migração para PostgreSQL, avaliar/adicionar exclusion constraint como segunda barreira.
+
+## Consistência e operação
+
+O produto também adota:
+
+```text
+@Version seletivo
+→ evita lost update em cadastros mutáveis
+
+Clock centralizado
+→ permite regras temporais determinísticas e testáveis
+
+Idempotency-Key quando necessário
+→ evita efeito duplicado por retry
+
+X-Correlation-Id
+→ rastreabilidade ponta a ponta
+
+Health checks
+Backup + restore testado
+Secrets fora do Git
+Limites de upload
+Matriz de autorização por perfil
+```
+
+Esses mecanismos entram nas etapas corretas. Não devem virar infraestrutura genérica antes da necessidade.
