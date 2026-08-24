@@ -71,8 +71,10 @@ Service
  ↓
 Repository
  ↓
-PostgreSQL
+Banco
 ```
+
+Durante o Core, o banco é H2. PostgreSQL entra somente na etapa definida no roadmap.
 
 ## DTOs
 
@@ -86,7 +88,16 @@ PacienteUpdateDTO
 PacienteResponseDTO
 ```
 
-Não criar dezenas de DTOs se dois bastarem.
+Relacionamentos recebidos pela API usam UUID público:
+
+```text
+pacientePublicId
+profissionalPublicId
+unidadePublicId
+procedimentoPublicId
+```
+
+Não criar dezenas de DTOs se dois ou três bastarem.
 
 ## Mapper
 
@@ -96,13 +107,44 @@ Se o projeto acumular muito boilerplate, avaliar MapStruct depois.
 
 ## IDs
 
-MVP:
+Padrão obrigatório desde o primeiro CRUD:
 
-```java
-Long id;
+```text
+id        Long
+publicId  UUID
 ```
 
-Todos os relacionamentos internos usam IDs numéricos.
+`id`:
+
+- PK técnica;
+- FKs internas;
+- locks e operações internas.
+
+`publicId`:
+
+- URLs;
+- DTOs;
+- respostas;
+- integrações;
+- app Kotlin;
+- assistentes.
+
+Exemplo JPA:
+
+```java
+@Id
+@GeneratedValue(strategy = GenerationType.IDENTITY)
+private Long id;
+
+@Column(nullable = false, unique = true, updatable = false)
+private UUID publicId;
+```
+
+O `publicId` é gerado uma única vez antes do primeiro persist.
+
+Nunca expor o `Long id` na API pública.
+
+Relacionamentos no banco continuam usando IDs numéricos.
 
 ## Datas
 
@@ -135,7 +177,7 @@ Formato:
   "status": 404,
   "code": "PACIENTE_NOT_FOUND",
   "message": "Paciente não encontrado",
-  "path": "/api/v1/pacientes/10"
+  "path": "/api/v1/pacientes/7b2f4b2c-8d8f-4f45-8e48-39ad9aa84aac"
 }
 ```
 
@@ -166,7 +208,7 @@ DB_URL
 DB_USER
 DB_PASSWORD
 JWT_SECRET
-STORAGE_* 
+STORAGE_*
 ```
 
 ## Transactions
@@ -178,14 +220,48 @@ Service é a fronteira transacional.
 
 ## Repositories
 
-Para entidades tenant-scoped, preferir métodos explícitos:
+Para entidades tenant-scoped chamadas pela API, preferir métodos explícitos por UUID público:
 
 ```java
-Optional<Paciente> findByIdAndTenantId(Long id, Long tenantId);
-List<Paciente> findAllByTenantId(Long tenantId);
+Optional<Paciente> findByPublicIdAndTenantId(UUID publicId, Long tenantId);
+Page<Paciente> findAllByTenantId(Long tenantId, Pageable pageable);
 ```
 
-Isso é repetitivo, mas reduz risco no início.
+O `tenantId` interno vem do contexto já resolvido pelo servidor.
+
+`findById(Long id)` pode existir apenas para uso interno quando o recurso já foi resolvido/autorizado.
+
+## Concorrência
+
+Operações que disputam o mesmo recurso devem ser tratadas dentro da transação.
+
+Caso principal do MVP:
+
+```text
+dois pacientes
++
+mesmo profissional
++
+mesmo intervalo
+```
+
+Fluxo:
+
+```text
+@Transactional
+↓
+lock pessimista no profissional
+↓
+revalidar disponibilidade
+↓
+consultar overlap
+↓
+salvar
+```
+
+A disponibilidade mostrada ao cliente nunca é garantia de reserva.
+
+Detalhamento obrigatório em `21_PUBLIC_ID_E_CONCORRENCIA.md`.
 
 ## Dependências entre módulos
 
@@ -233,7 +309,6 @@ S3StorageService (prod/futuro)
 
 A arquitetura deve ser limpa sem virar um projeto de infraestrutura.
 
-
 ---
 
 ## Regra prática de implementação
@@ -252,7 +327,6 @@ Não criar todas as camadas do sistema antecipadamente.
 
 A separação por módulo serve para organização, não para transformar cada módulo em um microsserviço.
 
-
 ---
 
 ## Documentação como guardrail
@@ -266,6 +340,7 @@ HTTP/API → 17
 Services → 18
 Qualidade → 19
 IA externa → 20
+Public ID/Concorrência → 21
 ```
 
 A intenção é que a estrutura da API permaneça consistente mesmo quando implementada em sessões isoladas ou com auxílio de diferentes ferramentas.
