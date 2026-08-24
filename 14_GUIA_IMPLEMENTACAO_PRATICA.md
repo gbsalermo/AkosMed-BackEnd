@@ -94,12 +94,12 @@ Pode criar DTO antes do Service se isso ajudar a definir o contrato.
 
 Errado:
 
-```text
+```java
 @PostMapping
 public Paciente salvar(@RequestBody Paciente paciente)
 ```
 
-Correto conceitualmente:
+Correto:
 
 ```text
 PacienteCreateDTO
@@ -121,20 +121,22 @@ public AgendamentoResponseDTO criar(AgendamentoCreateDTO dto) {
     Long tenantId = tenantContext.getTenantId();
 
     Paciente paciente = pacienteRepository
-        .findByIdAndTenantId(dto.pacienteId(), tenantId)
+        .findByPublicIdAndTenantId(dto.pacientePublicId(), tenantId)
         .orElseThrow(...);
 
-    ProfissionalSaude profissional = ...
-    Unidade unidade = ...
-    Procedimento procedimento = ...
+    ProfissionalSaude profissional = profissionalRepository
+        .findForUpdateByPublicIdAndTenantId(dto.profissionalPublicId(), tenantId)
+        .orElseThrow(...);
+
+    Unidade unidade = ...;
+    Procedimento procedimento = ...;
 
     validarRelacionamentos(...);
     validarDisponibilidade(...);
     validarConflito(...);
 
-    Agendamento agendamento = ...
+    Agendamento agendamento = ...;
     agendamentoRepository.save(agendamento);
-
     registrarEvento(...);
 
     return toResponse(agendamento);
@@ -147,13 +149,15 @@ public AgendamentoResponseDTO criar(AgendamentoCreateDTO dto) {
 
 Preferir derived query/JPQL legível.
 
-Exemplo:
+Na fronteira pública:
 
 ```text
-findByIdAndTenantId
+findByPublicIdAndTenantId
 findAllByTenantId
 existsByCodigoAndTenantId
 ```
+
+`findById` pode existir para uso estritamente interno, depois que o recurso já foi resolvido/autorizado.
 
 Evitar generic repository customizado.
 
@@ -172,18 +176,25 @@ SummaryDTO
 
 Não criar `UpdateDTO` se o recurso não puder ser editado livremente.
 
-Exemplo:
+DTOs relacionais recebem UUIDs públicos:
 
-Agendamento usa ações específicas para status.
+```text
+pacientePublicId
+profissionalPublicId
+unidadePublicId
+procedimentoPublicId
+```
+
+Nunca receber PK `Long id` do cliente.
 
 ---
 
 # 8. Actions em vez de PUT genérico
 
 ```http
-PATCH /agendamentos/{id}/confirmar
-PATCH /agendamentos/{id}/check-in
-PATCH /agendamentos/{id}/cancelar
+PATCH /agendamentos/{publicId}/confirmar
+PATCH /agendamentos/{publicId}/check-in
+PATCH /agendamentos/{publicId}/cancelar
 ```
 
 Isso deixa regra explícita.
@@ -238,6 +249,7 @@ Depois usar:
 
 ```text
 19_CHECKLIST_REVISAO_QUALIDADE.md
+21_PUBLIC_ID_E_CONCORRENCIA.md
 ```
 
 Se estiver usando IA externa, seguir:
@@ -259,6 +271,7 @@ Se estiver usando IA externa, seguir:
 - `double` para dinheiro;
 - setter público para tudo;
 - `tenantId` confiado ao request;
+- ID `Long` exposto ao cliente;
 - hard delete clínico;
 - status alterável livremente;
 - consultas sem paginação para listas grandes;
@@ -283,3 +296,78 @@ otimizado
 ```
 
 Não inverter essa ordem.
+
+---
+
+# 15. Public ID
+
+Toda Entity persistida nasce com:
+
+```text
+Long id
+UUID publicId
+```
+
+`id` é PK/FK interna.
+
+`publicId` é usado por Controller, DTO, URL, integrações e apps.
+
+Exemplo:
+
+```java
+@GetMapping("/{publicId}")
+public PacienteResponseDTO buscar(@PathVariable UUID publicId) {
+    return service.buscarPorPublicId(publicId);
+}
+```
+
+O Service combina:
+
+```text
+publicId + tenantId interno do contexto
+```
+
+Nunca permita que CreateDTO escolha o `publicId`.
+
+---
+
+# 16. Concorrência
+
+Nunca confundir:
+
+```text
+"o slot apareceu disponível"
+```
+
+com:
+
+```text
+"o slot está garantido"
+```
+
+A garantia ocorre apenas dentro da transação de criação/reagendamento.
+
+Fluxo:
+
+```text
+@Transactional
+↓
+lock pessimista no profissional
+↓
+revalidar disponibilidade
+↓
+consultar overlap
+↓
+salvar
+↓
+commit
+```
+
+Dois pacientes disputando o mesmo horário:
+
+```text
+1 sucesso
+1 AGENDAMENTO_CONFLITO
+```
+
+No PostgreSQL, validar com Testcontainers e duas transações reais. Avaliar também exclusion constraint como segunda barreira.
