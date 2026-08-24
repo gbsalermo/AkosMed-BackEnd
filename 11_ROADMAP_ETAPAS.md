@@ -116,11 +116,25 @@ Testar:
 
 ---
 
-## 0.5 Smoke tests
+## 0.5 Clock + Correlation ID
+
+- [ ] criar bean `Clock`;
+- [ ] Services temporais não usam `now()` diretamente;
+- [ ] criar `CorrelationIdFilter`;
+- [ ] aceitar ou gerar `X-Correlation-Id`;
+- [ ] devolver correlationId em `ApiErrorDTO`.
+
+---
+
+## 0.6 Smoke tests
 
 - [ ] `contextLoads`;
 - [ ] teste de controller simples;
+- [ ] teste do correlationId;
+- [ ] teste com Clock fixo;
 - [ ] `mvn test`.
+
+Referência: `22_CONCORRENCIA_IDEMPOTENCIA_CLOCK_OPERACAO.md`.
 
 ### ETAPA 0 concluída quando
 
@@ -136,6 +150,7 @@ Campos:
 
 ```text
 id
+publicId
 nome
 nomeFantasia
 slug
@@ -146,11 +161,18 @@ createdAt
 updatedAt
 ```
 
+### Identificação pública
+
+- [ ] `id Long` interno;
+- [ ] `publicId UUID` imutável;
+- [ ] Controller usa UUID;
+- [ ] ResponseDTO não expõe `id`.
+
 ### Métodos esperados
 
 ```text
 criar
-buscarPorId
+buscarPorPublicId
 listar
 atualizar
 ativar
@@ -181,6 +203,7 @@ Campos:
 
 ```text
 id
+publicId
 tenant
 nome
 codigo
@@ -200,7 +223,7 @@ ativo
 ### Repository mínimo
 
 ```text
-findByIdAndTenantId
+findByPublicIdAndTenantId
 findAllByTenantId
 existsByCodigoAndTenantId
 ```
@@ -239,6 +262,7 @@ Campos:
 
 ```text
 id
+publicId
 tenant
 nomeCompleto
 nomeSocial
@@ -264,6 +288,7 @@ Campos:
 
 ```text
 id
+publicId
 emailLogin
 passwordHash
 status
@@ -294,6 +319,7 @@ Campos:
 
 ```text
 id
+publicId
 usuario
 tenant
 pessoa
@@ -351,7 +377,7 @@ UsuarioTenant ativo
 ↓
 senha
 ↓
-token com tenantId + usuarioId + usuarioTenantId + perfil
+token com tenantPublicId + usuarioPublicId + usuarioTenantPublicId + perfil
 ```
 
 ---
@@ -363,6 +389,7 @@ Entidade:
 ```text
 RefreshToken
 id
+publicId
 usuarioTenant
 tokenHash
 expiraEm
@@ -401,6 +428,7 @@ Campos:
 
 ```text
 id
+publicId
 tenant
 nome
 codigo
@@ -421,6 +449,7 @@ Campos:
 
 ```text
 id
+publicId
 tenant
 nome
 codigo
@@ -444,6 +473,7 @@ Campos:
 
 ```text
 id
+publicId
 tenant
 pessoa
 tipoProfissional
@@ -468,6 +498,7 @@ Campos:
 
 ```text
 id
+publicId
 profissional
 especialidade
 principal
@@ -505,6 +536,7 @@ Campos:
 
 ```text
 id
+publicId
 tenant
 pessoa
 numeroProntuario
@@ -534,6 +566,7 @@ Campos:
 
 ```text
 id
+publicId
 tenant
 profissional
 unidade
@@ -560,6 +593,7 @@ Campos:
 
 ```text
 id
+publicId
 tenant
 profissional
 unidade
@@ -582,9 +616,9 @@ Método principal:
 
 ```text
 buscarHorariosDisponiveis(
-  profissionalId,
-  unidadeId,
-  procedimentoId,
+  profissionalPublicId,
+  unidadePublicId,
+  procedimentoPublicId,
   data
 )
 ```
@@ -610,6 +644,7 @@ Campos:
 
 ```text
 id
+publicId
 tenant
 unidade
 paciente
@@ -647,7 +682,7 @@ Service deve:
 Métodos:
 
 ```text
-buscarPorId
+buscarPorPublicId
 listarPorData
 listarPorProfissionalEPeriodo
 listarPorPaciente
@@ -680,11 +715,42 @@ Salvar eventos de mudança.
 
 ---
 
-## 5.5 Conflito no H2
+## 5.5 Conflito e concorrência
 
-Criar teste funcional de overlap.
+### H2
 
-A proteção de concorrência definitiva será revalidada no PostgreSQL.
+- [ ] testar overlap funcional;
+- [ ] testar intervalos adjacentes;
+- [ ] definir status que bloqueiam slot;
+- [ ] criação e reagendamento reutilizam a mesma validação.
+
+### PostgreSQL
+
+A proteção concorrente definitiva será validada na ETAPA 11.
+
+Estratégia planejada:
+
+```text
+@Transactional
+PESSIMISTIC_WRITE no profissional
+revalidar disponibilidade
+verificar overlap
+salvar
+```
+
+Dois pacientes no mesmo horário:
+
+```text
+1 sucesso
+1 conflito
+```
+
+Não avançar para fechamento enquanto esse teste real não passar.
+
+### Idempotência
+
+- [ ] avaliar `Idempotency-Key` no POST de agendamento;
+- [ ] retries da mesma operação não podem criar efeitos duplicados.
 
 ---
 
@@ -710,6 +776,7 @@ Campos:
 
 ```text
 id
+publicId
 tenant
 prontuario
 unidade
@@ -735,6 +802,7 @@ Campos:
 
 ```text
 id
+publicId
 tenant
 atendimento
 profissional
@@ -797,9 +865,15 @@ Após EMITIDA:
 ## 7.3 Gerador de receita
 
 No Core:
+
 gerar representação a partir da Prescricao.
 
 Assinatura digital fica para futuro.
+
+### Idempotência de emissão
+
+- [ ] avaliar `Idempotency-Key` para emissão;
+- [ ] retry não pode emitir duas vezes.
 
 ---
 
@@ -868,8 +942,29 @@ Guardar IDs simples.
 - CORS;
 - logs;
 - secrets;
+- correlationId completo;
 - acesso por unidade;
 - revisão de endpoints.
+
+## 9.3 Matriz de autorização
+
+- [ ] ADMIN_TENANT;
+- [ ] SECRETARIA;
+- [ ] PROFISSIONAL;
+- [ ] PACIENTE;
+- [ ] AUDITOR;
+- [ ] recurso × ação;
+- [ ] testes de acesso permitido/negado.
+
+Referência: `22_CONCORRENCIA_IDEMPOTENCIA_CLOCK_OPERACAO.md`.
+
+## 9.4 Optimistic locking
+
+Revisar entidades mutáveis:
+
+- [ ] `@Version` onde lost update for relevante;
+- [ ] conflito convertido para `409 RESOURCE_VERSION_CONFLICT`;
+- [ ] testes com duas atualizações concorrentes.
 
 ---
 
@@ -960,11 +1055,15 @@ Obrigatório revalidar:
 
 Testcontainers/PostgreSQL:
 
-duas transações concorrentes para mesmo profissional/horário.
+- [ ] disparar duas transações simultâneas para o mesmo profissional/período;
+- [ ] usar lock pessimista no profissional;
+- [ ] a segunda transação deve esperar/revalidar;
+- [ ] apenas uma pode persistir;
+- [ ] a outra deve resultar em `AGENDAMENTO_CONFLITO`;
+- [ ] repetir cenário de reagendamento;
+- [ ] avaliar/adicionar exclusion constraint PostgreSQL como defesa adicional.
 
-Apenas uma pode concluir.
-
-Se necessário, ajustar lock/constraint.
+A ETAPA 11 não termina se for possível persistir overlap por corrida concorrente.
 
 ---
 
@@ -1017,7 +1116,7 @@ Criar environment:
 baseUrl
 accessToken
 tenantSlug
-ids de teste
+publicIds de teste
 ```
 
 Validar happy path + erros principais.
@@ -1025,6 +1124,18 @@ Validar happy path + erros principais.
 ---
 
 # ETAPA 14 — FECHAMENTO BACKEND MVP 1.0
+
+## 14.1 Operação/produção
+
+- [ ] Actuator/health;
+- [ ] secrets fora do repositório;
+- [ ] limites de upload;
+- [ ] estratégia de backup;
+- [ ] teste de restore;
+- [ ] logs/correlationId revisados;
+- [ ] observabilidade mínima.
+
+## 14.2 Fechamento técnico
 
 - [ ] testes H2;
 - [ ] testes PostgreSQL;
@@ -1042,7 +1153,7 @@ Validar happy path + erros principais.
 
 Criar endpoints `/me`.
 
-Sem permitir paciente escolher outro `pacienteId`.
+Sem permitir paciente escolher outro `pacientePublicId`.
 
 ---
 
