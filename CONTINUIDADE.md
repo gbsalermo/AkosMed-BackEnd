@@ -11,6 +11,8 @@
 **Repositório:** `akosmed-backend`  
 **Package:** `br.com.akosmed`  
 **Arquitetura:** Monólito modular  
+**Identificação pública:** `UUID publicId` em todas as entidades persistidas  
+**PK interna:** `Long id`, nunca exposta na API  
 **Banco durante desenvolvimento:** H2  
 **Banco definitivo:** PostgreSQL — somente após o Core funcional  
 **Swagger/OpenAPI:** após PostgreSQL  
@@ -186,7 +188,7 @@ Mesmo enquanto estivermos no H2, toda entidade tenant-scoped já deve respeitar 
 Repositories explícitos:
 
 ```text
-findByIdAndTenantId(...)
+findByPublicIdAndTenantId(...)
 findAllByTenantId(...)
 existsBy...AndTenantId(...)
 ```
@@ -247,19 +249,41 @@ Não persistir slots futuros.
 
 ---
 
-## 4.9 IDs
+## 4.9 IDs públicos
 
-Usar `Long` no MVP.
+Padrão oficial:
 
-Facilita:
+```text
+id       Long
+publicId UUID
+```
 
-- debugging;
-- testes;
-- H2;
-- Postman;
-- JPA.
+### `id`
 
-`UUID/publicId` pode entrar no futuro se houver necessidade externa.
+- PK interna;
+- FK interna;
+- usada por JPA e banco;
+- nunca enviada em DTO público;
+- nunca usada em URL pública.
+
+### `publicId`
+
+- UUID v4;
+- gerado pela aplicação;
+- imutável;
+- `NOT NULL`;
+- `UNIQUE`;
+- `updatable = false`;
+- usado em endpoints, DTOs e integrações.
+
+Repositories tenant-scoped:
+
+```text
+findByPublicIdAndTenantId(...)
+findAllByTenantId(...)
+```
+
+O `Long id` pode ser usado internamente depois que o recurso foi resolvido pelo `publicId`.
 
 ---
 
@@ -309,6 +333,57 @@ seNecessario
 
 ---
 
+## 4.12 Concorrência de agendamento
+
+Double booking é regra crítica do produto.
+
+```text
+Paciente A → profissional X → 14:00
+Paciente B → profissional X → 14:00
+requisições simultâneas
+```
+
+Resultado:
+
+```text
+uma reserva vence
+a outra recebe 409 AGENDAMENTO_CONFLITO
+```
+
+Estratégia oficial:
+
+```text
+@Transactional
+↓
+PESSIMISTIC_WRITE no Profissional
+↓
+validar disponibilidade/bloqueios
+↓
+consultar overlap
+↓
+salvar Agendamento
+↓
+registrar EventoAgendamento
+↓
+commit
+```
+
+O lock ocorre no profissional porque dois INSERTs concorrentes ainda não possuem uma linha de Agendamento comum para travar.
+
+No H2:
+- implementar o fluxo;
+- testar overlap;
+- executar teste concorrente básico.
+
+No PostgreSQL/Testcontainers:
+- repetir concorrência real;
+- validar lock;
+- adicionar exclusion constraint como segunda barreira.
+
+Consultar `21_PUBLIC_ID_E_CONCORRENCIA.md`.
+
+---
+
 # 5. PADRÃO DE IMPLEMENTAÇÃO DE UMA SUBETAPA
 
 Para uma feature normal:
@@ -330,6 +405,8 @@ Para uma feature normal:
 [ ] executar testes
 [ ] revisar tenant isolation
 [ ] revisar relacionamentos/cascade/fetch
+[ ] revisar publicId e ausência de Long id nos DTOs/URLs
+[ ] revisar concorrência quando houver operação disputável
 [ ] atualizar CONTINUIDADE
 [ ] commit
 ```

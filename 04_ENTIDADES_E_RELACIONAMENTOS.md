@@ -7,12 +7,44 @@ Se outro documento divergir em campos ou relacionamentos, este arquivo deve ser 
 
 # Convenções
 
-## Entidades tenant-scoped
+## Identificação obrigatória
+
+Toda entidade persistida possui:
+
+```text
+id Long
+publicId UUID
+```
+
+`id` é interno.
+
+`publicId` é externo e imutável.
+
+Padrão JPA conceitual:
+
+```java
+@Id
+@GeneratedValue(strategy = GenerationType.IDENTITY)
+private Long id;
+
+@Column(nullable = false, unique = true, updatable = false)
+private UUID publicId;
+
+@PrePersist
+void gerarPublicId() {
+    if (publicId == null) {
+        publicId = UUID.randomUUID();
+    }
+}
+```
+
+Não usar `columnDefinition = "uuid"` para manter H2/PostgreSQL portáveis.
 
 Quando uma entidade pertence à organização:
 
 ```text
 id Long
+publicId UUID
 tenant
 ```
 
@@ -969,3 +1001,28 @@ Cada grupo entra apenas na etapa do roadmap correspondente.
 - SolicitacaoPaciente;
 - DevicePushToken;
 - PlanoSaas/AssinaturaSaas.
+
+---
+
+## Regra de exposição dos relacionamentos
+
+As FKs do banco usam `Long id`.
+
+DTOs usam `UUID publicId`.
+
+Exemplo:
+
+```text
+agendamentos.profissional_id → BIGINT interno
+AgendamentoCreateDTO.profissionalPublicId → UUID externo
+```
+
+O Service resolve o `publicId` para a Entity e nunca confia em IDs internos enviados pelo cliente.
+
+---
+
+## Documento obrigatório complementar
+
+Para identificadores públicos e concorrência, consultar:
+
+`21_PUBLIC_ID_E_CONCORRENCIA.md`

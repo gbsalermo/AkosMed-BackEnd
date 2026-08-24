@@ -5,6 +5,9 @@
 **Package base:** `br.com.akosmed`  
 **Escopo atual:** Backend + banco de dados  
 **Arquitetura:** Monólito modular  
+**Identificador externo:** `UUID publicId` obrigatório  
+**PK interna:** `Long id`  
+**Concorrência crítica:** agendamento protegido contra double booking  
 **Objetivo da documentação:** permitir implementar e revisar a API com segurança mesmo sem revisão direta dentro do repositório.
 
 ---
@@ -143,6 +146,7 @@ Não criar todas as entities antes de começar os Services.
 | `18_MAPA_METODOS_SERVICES.md` | Métodos esperados por módulo |
 | `19_CHECKLIST_REVISAO_QUALIDADE.md` | Checklist para revisar cada etapa |
 | `20_GUIA_USO_IA_PARA_REVISAO.md` | Como usar IA externa como segunda revisão |
+| `21_PUBLIC_ID_E_CONCORRENCIA.md` | Regra oficial de publicId e controle de concorrência |
 
 ---
 
@@ -179,3 +183,54 @@ Tenant
 Próxima tarefa oficial:
 
 > **ETAPA 0.1 — Gerar o projeto Spring Boot com H2 no repositório existente.**
+
+---
+
+# Convenções obrigatórias do produto
+
+## Public ID
+
+Toda entidade persistida do AkosMed usa:
+
+```text
+id Long        → somente banco/backend
+publicId UUID  → API, DTOs, URLs, integrações
+```
+
+Exemplo:
+
+```http
+GET /api/v1/pacientes/550e8400-e29b-41d4-a716-446655440000
+```
+
+A API nunca deve devolver ou exigir o `Long id`.
+
+## Concorrência
+
+Agendamento é uma operação concorrente.
+
+Caso crítico:
+
+```text
+Paciente A tenta 14:00
+Paciente B tenta 14:00
+mesmo profissional
+```
+
+Resultado obrigatório:
+
+```text
+1 agendamento criado
+1 resposta 409 AGENDAMENTO_CONFLITO
+```
+
+Proteção:
+
+```text
+@Transactional
+→ lock pessimista no profissional
+→ validação de overlap
+→ insert
+```
+
+Na migração para PostgreSQL, adicionar uma constraint de exclusão como segunda barreira.
