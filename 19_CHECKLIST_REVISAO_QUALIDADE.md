@@ -40,6 +40,8 @@ Use antes de marcar qualquer subetapa como concluída.
 - [ ] Respostas compostas usam SummaryDTO quando necessário?
 - [ ] Datas estão em tipo adequado?
 - [ ] Dinheiro é BigDecimal?
+- [ ] `Long id` interno não é exposto?
+- [ ] relações externas usam `...PublicId`?
 
 ---
 
@@ -47,7 +49,8 @@ Use antes de marcar qualquer subetapa como concluída.
 
 - [ ] Repository trabalha com Entity?
 - [ ] Query tenant-scoped possui tenantId?
-- [ ] Evitei `findById()` onde deveria usar tenant?
+- [ ] Evitei `findById()` vindo da API?
+- [ ] Busca pública usa `publicId + tenantId`?
 - [ ] Listagem grande usa paginação?
 - [ ] Query é legível?
 - [ ] SQL nativo foi realmente necessário?
@@ -67,6 +70,8 @@ Use antes de marcar qualquer subetapa como concluída.
 - [ ] Lanço exception de negócio adequada?
 - [ ] Não engulo exception com `catch(Exception)`?
 - [ ] Não há regra de negócio no Controller?
+- [ ] Regra temporal usa `Clock` em vez de `now()` espalhado?
+- [ ] operação crítica precisa ser idempotente?
 
 ---
 
@@ -80,6 +85,7 @@ Use antes de marcar qualquer subetapa como concluída.
 - [ ] Não monta Entity?
 - [ ] Não decide regra de tenant?
 - [ ] Ações de domínio têm endpoint explícito?
+- [ ] Paths públicos usam UUID?
 
 ---
 
@@ -88,7 +94,7 @@ Use antes de marcar qualquer subetapa como concluída.
 - [ ] Criei recurso no Tenant A?
 - [ ] Usuário Tenant B não consegue ler?
 - [ ] Usuário Tenant B não consegue alterar?
-- [ ] Usuário Tenant B não consegue usar ID relacionado?
+- [ ] Usuário Tenant B não consegue usar publicId relacionado?
 - [ ] Unidade pertence ao mesmo tenant?
 - [ ] Profissional/paciente/procedimento são do mesmo tenant?
 
@@ -102,6 +108,7 @@ Use antes de marcar qualquer subetapa como concluída.
 - [ ] endpoint exige perfil apropriado?
 - [ ] paciente só vê seus dados?
 - [ ] acesso por unidade foi considerado?
+- [ ] secret não está versionado?
 
 ---
 
@@ -116,6 +123,7 @@ Use antes de marcar qualquer subetapa como concluída.
 - [ ] relacionamento inválido?
 - [ ] `mvn test` executado?
 - [ ] resultado registrado?
+- [ ] regra temporal usa `Clock.fixed` quando necessário?
 
 ---
 
@@ -147,7 +155,9 @@ Na ETAPA 11:
 - [ ] concurrency;
 - [ ] Testcontainers;
 - [ ] timezone;
-- [ ] unique constraints.
+- [ ] unique constraints;
+- [ ] double booking real testado;
+- [ ] exclusion constraint avaliada/testada.
 
 ---
 
@@ -186,6 +196,80 @@ Postman:
 
 ---
 
+# N. Public ID e concorrência de agenda
+
+## Public ID
+
+- [ ] Entity possui `Long id` interno?
+- [ ] recurso público possui `UUID publicId`?
+- [ ] publicId é unique e imutável?
+- [ ] CreateDTO não permite escolher publicId?
+- [ ] ResponseDTO não expõe id Long?
+- [ ] Paths usam UUID?
+- [ ] JWT evita IDs sequenciais?
+
+## Double booking
+
+- [ ] overlap usa `inicio < novoFim && fim > novoInicio`?
+- [ ] status cancelados liberam slot?
+- [ ] criação revalida dentro da transação?
+- [ ] reagendamento usa a mesma proteção?
+- [ ] PostgreSQL usa lock pessimista?
+- [ ] teste com duas transações concorrentes existe?
+- [ ] resultado é exatamente 1 sucesso + 1 conflito?
+
+---
+
+# O. Lost update, idempotência e tempo
+
+## Optimistic locking
+
+- [ ] entidade mutável precisa de `@Version`?
+- [ ] update concorrente gera `409 RESOURCE_VERSION_CONFLICT`?
+- [ ] versão antiga nunca sobrescreve silenciosamente uma nova?
+
+## Idempotência
+
+- [ ] operação pode sofrer retry de rede?
+- [ ] há risco de efeito duplicado?
+- [ ] precisa de `Idempotency-Key`?
+- [ ] mesma key + payload diferente gera conflito?
+
+## Clock
+
+- [ ] Service temporal recebe `Clock`?
+- [ ] evita `LocalDateTime.now()`/`Instant.now()` espalhado?
+- [ ] timezone do Tenant foi respeitado?
+- [ ] teste usa `Clock.fixed`?
+
+---
+
+# P. Rastreabilidade e operação
+
+## Correlation ID
+
+- [ ] request aceita ou gera `X-Correlation-Id`?
+- [ ] erro devolve o mesmo correlationId?
+- [ ] logs usam correlationId?
+- [ ] AuditLog recebe correlationId quando aplicável?
+
+## Logs
+
+- [ ] não loga senha/token completo?
+- [ ] não loga conteúdo clínico sensível?
+- [ ] usa identificadores seguros quando possível?
+
+## Produção
+
+- [ ] secret está fora do Git?
+- [ ] upload tem limite e MIME permitido?
+- [ ] health check está definido?
+- [ ] backup existe?
+- [ ] restore foi testado?
+- [ ] matriz de autorização recurso × perfil × ação foi revisada?
+
+---
+
 # Regra final
 
 Se houver dúvida em qualquer item crítico de:
@@ -196,6 +280,13 @@ segurança
 prontuário
 prescrição
 agendamento
+concorrência
+integridade de atualização
 ```
 
 não marque a subetapa como concluída até revisar.
+
+Consultar também:
+
+- `21_PUBLIC_ID_E_CONCORRENCIA.md`
+- `22_CONCORRENCIA_IDEMPOTENCIA_CLOCK_OPERACAO.md`
