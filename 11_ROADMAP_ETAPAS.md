@@ -31,7 +31,7 @@ Swagger e Postman entram somente no fechamento.
 
 ## 0.1 Projeto base
 
-- [ ] criar repositório `akosmed-backend`;
+- [x] criar repositório `gbsalermo/AkosMed-BackEnd`;
 - [ ] Spring Boot Maven;
 - [ ] Java 21;
 - [ ] package `br.com.akosmed`;
@@ -797,7 +797,6 @@ Após EMITIDA:
 ## 7.3 Gerador de receita
 
 No Core:
-
 gerar representação a partir da Prescricao.
 
 Assinatura digital fica para futuro.
