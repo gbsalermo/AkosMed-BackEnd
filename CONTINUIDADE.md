@@ -8,51 +8,25 @@
 # 1. ESTADO ATUAL
 
 **Projeto:** AkosMed  
-**Repositório:** `akosmed-backend`  
+**Repositório:** `gbsalermo/AkosMed-BackEnd`  
 **Package:** `br.com.akosmed`  
 **Arquitetura:** Monólito modular  
-**Identificação pública:** `UUID publicId` em todas as entidades persistidas  
-**PK interna:** `Long id`, nunca exposta na API  
 **Banco durante desenvolvimento:** H2  
-**Banco definitivo:** PostgreSQL — somente após o Core funcional  
+**Banco definitivo:** PostgreSQL após o Core funcional  
 **Swagger/OpenAPI:** após PostgreSQL  
 **Postman:** após Swagger  
-**Status geral:** 🟡 DOCUMENTAÇÃO NO REPOSITÓRIO / IMPLEMENTAÇÃO SPRING NÃO INICIADA  
+**Status:** 🟡 DOCUMENTAÇÃO CONCLUÍDA / IMPLEMENTAÇÃO SPRING NÃO INICIADA  
 **Etapa atual:** ETAPA 0 — Fundação  
-**Próxima tarefa:** **0.1 — Gerar projeto Spring Boot + H2 no repositório existente**
+**Próxima tarefa:** **0.1 — Gerar Spring Boot + H2 no repositório existente**
 
 ---
 
-# 2. PRINCÍPIO DE DESENVOLVIMENTO
-
-O AkosMed será construído como nos projetos SGL/RAScomp:
-
-```text
-uma subetapa
-↓
-implementação completa
-↓
-teste
-↓
-revisão
-↓
-registro no CONTINUIDADE
-↓
-commit
-↓
-próxima subetapa
-```
-
-Não desenvolver grandes blocos paralelos.
-
----
-
-# 3. ORDEM OFICIAL
+# 2. ORDEM OFICIAL
 
 ```text
 ETAPA 0  — Fundação com H2
 ETAPA 1  — Tenant + Unidade
-ETAPA 2  — Identidade + Auth + isolamento multi-tenant
+ETAPA 2  — Identidade + Auth + multi-tenant
 ETAPA 3  — Estrutura clínica base
 ETAPA 4  — Disponibilidade + bloqueios
 ETAPA 5  — Agendamento
@@ -61,7 +35,7 @@ ETAPA 7  — Prescrição + anexos
 ETAPA 8  — Operação diária + notificações
 ETAPA 9  — Auditoria + segurança
 ETAPA 10 — Revisão funcional completa em H2
-ETAPA 11 — PostgreSQL + Flyway + validação real
+ETAPA 11 — PostgreSQL + Flyway + Testcontainers
 ETAPA 12 — Swagger / OpenAPI
 ETAPA 13 — Postman + validação ponta a ponta
 ETAPA 14 — Fechamento Backend MVP 1.0
@@ -72,108 +46,110 @@ ETAPA 18 — Especializações
 ETAPA 19 — Módulos adicionais / integrações
 ```
 
-Detalhes em `11_ROADMAP_ETAPAS.md`.
+Detalhes: `11_ROADMAP_ETAPAS.md`.
+
+---
+
+# 3. PRINCÍPIO DE DESENVOLVIMENTO
+
+Como nos projetos SGL/RAScomp:
+
+```text
+uma subetapa
+↓
+implementação completa
+↓
+testes executados
+↓
+checklist de qualidade
+↓
+atualizar CONTINUIDADE
+↓
+commit
+↓
+próxima subetapa
+```
+
+Não desenvolver vários CRUDs em paralelo.
 
 ---
 
 # 4. DECISÕES OFICIAIS
 
-## 4.1 Arquitetura
+## 4.1 H2 primeiro
 
-Usar **monólito modular**.
-
-Não implementar inicialmente:
-
-- microsserviços;
-- Kafka;
-- RabbitMQ;
-- Redis;
-- Kubernetes;
-- CQRS;
-- event sourcing;
-- generic repository;
-- arquitetura distribuída.
-
----
-
-## 4.2 H2 primeiro
-
-Durante as etapas 0–10:
+Etapas 0–10:
 
 ```text
 Spring Boot
-↓
 JPA/Hibernate
-↓
 H2
+JUnit/Mockito
 ```
 
-Configuração sugerida:
+Sem PostgreSQL, Flyway, Swagger ou coleção Postman oficial no início.
 
-### dev
+---
+
+## 4.2 PostgreSQL depois
+
+ETAPA 11:
 
 ```text
-ddl-auto=update
+PostgreSQL Driver
+Flyway
+ddl-auto=validate
+Testcontainers PostgreSQL
+locks reais
+constraints
+migrations
 ```
 
-### test
+Revalidar:
+
+- multi-tenancy;
+- concorrência;
+- timezone;
+- queries;
+- índices;
+- constraints.
+
+---
+
+## 4.3 Swagger e Postman
 
 ```text
-ddl-auto=create-drop
+ETAPA 12 → Swagger/OpenAPI
+ETAPA 13 → Postman
 ```
 
-Sem Flyway inicialmente.
+A API será documentada depois de estabilizada no banco definitivo.
 
 ---
 
-## 4.3 PostgreSQL depois
+## 4.4 Public ID obrigatório
 
-A migração para PostgreSQL ocorre somente na ETAPA 11.
+Toda Entity persistida exposta externamente usa:
 
-Nesta etapa:
+```text
+id       Long → PK/FK interna
+publicId UUID → API/DTO/URL/integração
+```
 
-- revisar modelagem;
-- criar migrations;
-- adicionar PostgreSQL Driver;
-- adicionar Flyway;
-- trocar `ddl-auto` para `validate`;
-- executar bateria de testes;
-- revalidar locks;
-- revalidar multi-tenancy;
-- revalidar constraints;
-- usar Testcontainers.
+Regras:
 
----
+- `publicId` imutável;
+- unique;
+- gerado pela aplicação;
+- API nunca expõe `Long id`;
+- relacionamentos em requests usam `...PublicId`;
+- resource lookup público usa `publicId + tenant`.
 
-## 4.4 Swagger depois do banco
-
-Springdoc/OpenAPI será adicionado apenas na ETAPA 12.
-
-Motivo:
-
-documentar a API depois de:
-
-- regras estabilizadas;
-- entidades estabilizadas;
-- banco definitivo validado.
+Referência: `21_PUBLIC_ID_E_CONCORRENCIA.md`.
 
 ---
 
-## 4.5 Postman depois do Swagger
-
-A coleção oficial Postman será criada na ETAPA 13.
-
-Durante o desenvolvimento, a validação principal será:
-
-- testes automatizados;
-- execução local;
-- chamadas manuais pontuais quando necessário.
-
-Postman será o fechamento funcional da API.
-
----
-
-## 4.6 Multi-tenancy
+## 4.5 Multi-tenancy
 
 Modelo:
 
@@ -183,9 +159,11 @@ Shared Schema
 tenant_id
 ```
 
-Mesmo enquanto estivermos no H2, toda entidade tenant-scoped já deve respeitar o isolamento.
+O tenant vem do contexto autenticado.
 
-Repositories explícitos:
+Não confiar em `tenantId` do request.
+
+Repositories tenant-scoped:
 
 ```text
 findByPublicIdAndTenantId(...)
@@ -193,33 +171,148 @@ findAllByTenantId(...)
 existsBy...AndTenantId(...)
 ```
 
-Não confiar em `tenantId` vindo do body da requisição.
+---
+
+## 4.6 Concorrência de agendamento
+
+Double booking é regra crítica.
+
+```text
+Paciente A → profissional X → 14:00
+Paciente B → profissional X → 14:00
+```
+
+Resultado obrigatório:
+
+```text
+1 sucesso
+1 resposta 409 AGENDAMENTO_CONFLITO
+```
+
+Fluxo:
+
+```text
+@Transactional
+↓
+PESSIMISTIC_WRITE no profissional
+↓
+revalidar disponibilidade
+↓
+validar bloqueios
+↓
+consultar overlap
+↓
+salvar
+↓
+EventoAgendamento
+↓
+commit
+```
+
+No PostgreSQL/Testcontainers, testar duas transações realmente concorrentes e avaliar/adicionar exclusion constraint.
+
+Referência: `21_PUBLIC_ID_E_CONCORRENCIA.md`.
 
 ---
 
-## 4.7 Identidade
+## 4.7 Optimistic locking
 
-`Usuario` é global.
+Para entidades administrativas mutáveis, avaliar:
 
-`Pessoa` é tenant-scoped.
-
-```text
-Usuario
-   ↓
-UsuarioTenant
-   ├── Tenant
-   └── Pessoa
+```java
+@Version
+private Long version;
 ```
 
-Isso permite que a mesma credencial participe de múltiplas organizações sem misturar seus dados de domínio.
-
-Privilégio global:
+Objetivo:
 
 ```text
-Usuario.superAdmin
+evitar lost update
 ```
 
-Perfis dentro de Tenant:
+Conflito:
+
+```text
+409 RESOURCE_VERSION_CONFLICT
+```
+
+Não aplicar por padrão a históricos append-only como:
+
+```text
+EventoAgendamento
+EvolucaoClinica
+AuditLog
+```
+
+---
+
+## 4.8 Idempotência
+
+Operações críticas sujeitas a retry devem ser avaliadas para:
+
+```http
+Idempotency-Key
+```
+
+Candidatas:
+
+- criação de agendamento;
+- emissão de prescrição;
+- pagamentos/documentos futuros.
+
+Não criar infraestrutura genérica antes da necessidade real.
+
+---
+
+## 4.9 Clock centralizado
+
+Services dependentes do tempo devem receber:
+
+```java
+Clock
+```
+
+Evitar `now()` espalhado pelo domínio.
+
+Testes temporais usam:
+
+```java
+Clock.fixed(...)
+```
+
+Regra:
+
+```text
+instantes persistidos → UTC
+exibição/cálculo local → Tenant.timezone
+```
+
+---
+
+## 4.10 Correlation ID
+
+Toda request deve aceitar ou gerar:
+
+```http
+X-Correlation-Id
+```
+
+O mesmo valor acompanha:
+
+```text
+request
+logs
+ApiErrorDTO
+AuditLog quando aplicável
+```
+
+Nunca logar conteúdo clínico sensível, senha ou token completo.
+
+---
+
+## 4.11 Segurança e autorização
+
+Perfis tenant:
 
 ```text
 ADMIN_TENANT
@@ -229,497 +322,208 @@ PACIENTE
 AUDITOR
 ```
 
----
-
-## 4.8 Agenda simplificada
-
-Não criar entidade `Agenda` no MVP.
-
-Usar:
+Na ETAPA 9 consolidar matriz:
 
 ```text
-DisponibilidadeProfissional
-BloqueioAgenda
-Agendamento
+recurso × perfil × ação
 ```
 
-Horários disponíveis são calculados.
-
-Não persistir slots futuros.
+e testar acessos permitidos e negados.
 
 ---
 
-## 4.9 IDs públicos
+## 4.12 Operação/produção
 
-Padrão oficial:
+Antes do MVP de produção:
 
-```text
-id       Long
-publicId UUID
-```
+- health checks/Actuator;
+- secrets fora do Git;
+- limites de upload;
+- logs/correlationId;
+- backup automático;
+- retenção;
+- criptografia;
+- procedimento de restore;
+- teste real de restore;
+- observabilidade mínima.
 
-### `id`
+Backup sem teste de restore não é considerado concluído.
 
-- PK interna;
-- FK interna;
-- usada por JPA e banco;
-- nunca enviada em DTO público;
-- nunca usada em URL pública.
-
-### `publicId`
-
-- UUID v4;
-- gerado pela aplicação;
-- imutável;
-- `NOT NULL`;
-- `UNIQUE`;
-- `updatable = false`;
-- usado em endpoints, DTOs e integrações.
-
-Repositories tenant-scoped:
-
-```text
-findByPublicIdAndTenantId(...)
-findAllByTenantId(...)
-```
-
-O `Long id` pode ser usado internamente depois que o recurso foi resolvido pelo `publicId`.
+Referência: `22_CONCORRENCIA_IDEMPOTENCIA_CLOCK_OPERACAO.md`.
 
 ---
 
-## 4.10 Prontuário
+# 5. MODELO CLÍNICO PRINCIPAL
 
 ```text
-Paciente
-  1
-  ↓
-Prontuario
-  ↓
-Atendimento
-  ├── EvolucaoClinica
-  ├── Prescricao
-  └── AnexoClinico
+Tenant
+├── Unidade
+├── Pessoa
+│   ├── Paciente
+│   │   └── Prontuario
+│   │       └── Atendimento
+│   │           ├── EvolucaoClinica
+│   │           ├── Prescricao
+│   │           │   └── ItemPrescricao
+│   │           └── AnexoClinico
+│   └── ProfissionalSaude
+├── UsuarioTenant
+│   └── UsuarioUnidade
+├── Especialidade
+├── Procedimento
+├── DisponibilidadeProfissional
+├── BloqueioAgenda
+└── Agendamento
+    └── EventoAgendamento
 ```
 
-Sem hard delete do histórico clínico.
+Modelo canônico: `04_ENTIDADES_E_RELACIONAMENTOS.md`.
 
 ---
 
-## 4.11 Prescrição
+# 6. REGRAS DE IMPLEMENTAÇÃO
 
-Não criar catálogo farmacológico completo no MVP.
+Controller:
 
-Cada `ItemPrescricao` armazena os dados necessários da orientação prescrita.
+- recebe/retorna DTO;
+- usa `@Valid`;
+- não consulta Repository;
+- não contém regra de negócio.
 
-Campos principais:
+Service:
 
-```text
-nomeMedicamento
-concentracao
-formaFarmaceutica
-dose
-unidadeDose
-viaAdministracao
-frequencia
-vezesAoDia
-intervaloHoras
-duracaoDias
-dataInicio
-dataFim
-instrucoes
-usoContinuo
-seNecessario
-```
+- regra de negócio;
+- `@Transactional`;
+- tenant;
+- ownership;
+- status;
+- relacionamentos;
+- concorrência quando aplicável.
 
----
+Repository:
 
-## 4.12 Concorrência de agendamento
+- trabalha com Entity;
+- query tenant-scoped;
+- não recebe DTO.
 
-Double booking é regra crítica do produto.
+DTO:
 
-```text
-Paciente A → profissional X → 14:00
-Paciente B → profissional X → 14:00
-requisições simultâneas
-```
+- não expõe Entity;
+- não expõe `Long id`;
+- usa publicId para referências externas.
 
-Resultado:
+JPA:
 
-```text
-uma reserva vence
-a outra recebe 409 AGENDAMENTO_CONFLITO
-```
-
-Estratégia oficial:
-
-```text
-@Transactional
-↓
-PESSIMISTIC_WRITE no Profissional
-↓
-validar disponibilidade/bloqueios
-↓
-consultar overlap
-↓
-salvar Agendamento
-↓
-registrar EventoAgendamento
-↓
-commit
-```
-
-O lock ocorre no profissional porque dois INSERTs concorrentes ainda não possuem uma linha de Agendamento comum para travar.
-
-No H2:
-- implementar o fluxo;
-- testar overlap;
-- executar teste concorrente básico.
-
-No PostgreSQL/Testcontainers:
-- repetir concorrência real;
-- validar lock;
-- adicionar exclusion constraint como segunda barreira.
-
-Consultar `21_PUBLIC_ID_E_CONCORRENCIA.md`.
+- LAZY por padrão;
+- sem `ManyToMany` no Core;
+- sem `CascadeType.ALL` por conveniência;
+- sem hard delete de histórico clínico.
 
 ---
 
-# 5. PADRÃO DE IMPLEMENTAÇÃO DE UMA SUBETAPA
-
-Para uma feature normal:
+# 7. CHECKLIST DE UMA SUBETAPA
 
 ```text
-[ ] confirmar regra no roadmap
-[ ] modelar relacionamento
-[ ] criar Entity
-[ ] criar Enums
-[ ] criar DTO Create
-[ ] criar DTO Update se necessário
-[ ] criar DTO Response
-[ ] criar Repository
-[ ] criar Service
-[ ] criar Controller
-[ ] criar validações
-[ ] criar exceptions
-[ ] criar testes
-[ ] executar testes
-[ ] revisar tenant isolation
-[ ] revisar relacionamentos/cascade/fetch
-[ ] revisar publicId e ausência de Long id nos DTOs/URLs
-[ ] revisar concorrência quando houver operação disputável
-[ ] atualizar CONTINUIDADE
+[ ] regra confirmada
+[ ] Entity/Enum
+[ ] publicId
+[ ] @Version avaliado
+[ ] DTOs
+[ ] Repository tenant-scoped
+[ ] Service
+[ ] Controller
+[ ] validações/exceptions
+[ ] Clock se houver tempo
+[ ] concorrência se houver disputa
+[ ] idempotência avaliada se houver retry
+[ ] testes
+[ ] cross-tenant
+[ ] checklist 19 executado
+[ ] CONTINUIDADE atualizado
 [ ] commit
 ```
 
-Swagger e Postman **não fazem parte desse checklist durante o Core**.
-
 ---
 
-# 6. PADRÕES DE CAMADA
+# 8. DOCUMENTOS DE USO DURANTE IMPLEMENTAÇÃO
 
-## Controller
-
-Pode:
-
-- receber DTO;
-- usar `@Valid`;
-- chamar Service;
-- escolher status HTTP.
-
-Não pode:
-
-- consultar Repository;
-- decidir regra de negócio;
-- validar conflito de agenda;
-- escolher tenant manualmente.
-
----
-
-## Service
-
-Responsável por:
-
-- regra de negócio;
-- transação;
-- carregar relacionamentos;
-- validar ownership;
-- validar tenant;
-- validar status;
-- salvar;
-- retornar DTO.
-
-Escrita:
-
-```text
-@Transactional
-```
-
-Leitura:
-
-```text
-@Transactional(readOnly = true)
-```
-
----
-
-## Repository
-
-Trabalha com Entity.
-
-Não recebe DTO.
-
-Não contém regra de negócio.
-
-Consultas tenant-scoped precisam do `tenantId` quando aplicável.
-
----
-
-## DTO
-
-Não expor Entity diretamente.
-
-Separar:
-
-```text
-CreateDTO
-UpdateDTO
-ResponseDTO
-SummaryDTO
-```
-
-quando necessário.
-
----
-
-# 7. ENTIDADES DO MVP
-
-## Organização
-
-- Tenant
-- Unidade
-
-## Identidade
-
-- Pessoa
-- Usuario
-- UsuarioTenant
-- UsuarioUnidade
-- RefreshToken
-
-## Clínica
-
-- Especialidade
-- Procedimento
-- ProfissionalSaude
-- ProfissionalEspecialidade
-- ProfissionalUnidade
-- ProfissionalProcedimento
-- Paciente
-
-## Agenda
-
-- DisponibilidadeProfissional
-- BloqueioAgenda
-- Agendamento
-- EventoAgendamento
-
-## Prontuário
-
-- Prontuario
-- Atendimento
-- EvolucaoClinica
-
-## Prescrição e arquivos
-
-- Prescricao
-- ItemPrescricao
-- AnexoClinico
-
-## Operação
-
-- Notificacao
-- AuditLog
-
----
-
-# 8. ITENS ADIADOS
-
-Não implementar agora:
-
-- Perfil/Permissão totalmente dinâmicos;
-- PacienteUnidade;
-- catálogo farmacológico;
-- CID estruturado;
-- financeiro;
-- convênios;
-- estoque;
-- laboratório;
-- TISS;
-- RNDS;
-- telemedicina;
-- assinatura digital;
-- billing SaaS;
-- Dental;
-- Psychology;
-- Vision;
-- app Kotlin;
-- bot externo;
-- IA clínica.
-
----
-
-# 9. REGRAS CRÍTICAS
-
-## Multi-tenant
-
-Tenant A nunca acessa recurso do Tenant B.
-
-Testar explicitamente.
-
----
-
-## Relacionamentos
-
-Não usar `CascadeType.ALL` por padrão.
-
-Não usar `EAGER` por conveniência.
-
-Consultar `16_RELACIONAMENTOS_JPA_CASCADE_FETCH.md`.
-
----
-
-## Agenda
-
-Impedir overlap de profissional.
-
-No H2:
-
-- implementar regra;
-- criar testes de conflito.
-
-No PostgreSQL:
-
-- revalidar concorrência real;
-- revalidar lock.
-
----
-
-## Status
-
-Evitar alteração livre:
-
-```text
-PUT status
-```
-
-Usar ações:
-
-```text
-/confirmar
-/check-in
-/cancelar
-/reagendar
-/marcar-falta
-```
-
----
-
-## Prontuário
-
-Não atualizar registro clínico histórico silenciosamente.
-
-Retificação cria novo registro/vínculo.
-
----
-
-# 10. DOCUMENTOS PARA REVISAR DURANTE IMPLEMENTAÇÃO
-
-Antes de implementar uma entidade:
+## Antes de Entity/DTO/Repository
 
 - `04_ENTIDADES_E_RELACIONAMENTOS.md`
 - `15_PADROES_ENTIDADES_DTOS_REPOSITORIES.md`
 - `16_RELACIONAMENTOS_JPA_CASCADE_FETCH.md`
 
-Antes de criar Controller/API:
+## Antes de Controller/API
 
 - `06_APIS_CRUDS_E_REGRAS.md`
 - `17_PADROES_HTTP_ERROS_PAGINACAO.md`
 
-Antes de escrever Service:
+## Antes de Service
 
 - `18_MAPA_METODOS_SERVICES.md`
 
-Antes de marcar concluído:
+## Concorrência/publicId
+
+- `21_PUBLIC_ID_E_CONCORRENCIA.md`
+
+## Consistência/tempo/operação
+
+- `22_CONCORRENCIA_IDEMPOTENCIA_CLOCK_OPERACAO.md`
+
+## Antes de marcar concluído
 
 - `19_CHECKLIST_REVISAO_QUALIDADE.md`
 
-Ao usar outra IA para revisar:
+## Revisão com outra IA
 
 - `20_GUIA_USO_IA_PARA_REVISAO.md`
 
 ---
 
-# 11. STATUS DA ETAPA ATUAL
+# 9. ETAPA ATUAL
 
 ## ETAPA 0 — Fundação
 
-- [ ] 0.1 Criar projeto Spring Boot. *(repositório já criado)*
+- [x] Repositório criado.
+- [x] Documentação oficial versionada.
+- [ ] 0.1 Gerar Spring Boot Maven + Java 21.
 - [ ] 0.2 Configurar H2 dev/test.
-- [ ] 0.3 Criar estrutura inicial de packages.
+- [ ] 0.3 Criar packages iniciais conforme necessidade.
 - [ ] 0.4 Criar tratamento global de erros.
-- [ ] 0.5 Criar smoke tests.
-- [ ] 0.6 Validar execução local.
+- [ ] 0.5 Criar Clock + CorrelationIdFilter.
+- [ ] 0.6 Smoke tests / `mvn test`.
+- [ ] 0.7 Validar aplicação iniciando.
 
 ---
 
-# 12. PRÓXIMA TAREFA EXATA
+# 10. PRÓXIMA TAREFA EXATA
 
-## 0.1 — Spring Boot + H2
+## 0.1 — Gerar Spring Boot + H2
 
-Repositório já criado:
+Dependências iniciais:
 
-```text
-gbsalermo/AkosMed-BackEnd
-```
-
-Agora gerar o projeto Spring Boot dentro dele.
-
-Dependências:
-
-- Spring Web
-- Spring Data JPA
-- Validation
-- H2 Database
-- Spring Boot Test
+- Spring Web;
+- Spring Data JPA;
+- Validation;
+- H2 Database;
+- Spring Boot Test.
 
 Não adicionar ainda:
 
-- PostgreSQL Driver
-- Flyway
-- Springdoc
-- JWT
-- bibliotecas de mensageria
+- PostgreSQL Driver;
+- Flyway;
+- Springdoc;
+- JWT;
+- mensageria.
 
-Depois:
+Aceite:
 
-1. rodar `mvn test`;
-2. iniciar aplicação;
-3. registrar resultado;
-4. atualizar este arquivo;
-5. commit;
-6. avançar para 0.2.
+```text
+mvn test → BUILD SUCCESS
+aplicação inicia
+sem PostgreSQL
+sem Swagger
+sem entidades clínicas antecipadas
+```
 
----
-
-# 13. REGISTRO DA INICIALIZAÇÃO DO REPOSITÓRIO
-
-## 2026-08-23
-
-- [x] Repositório `gbsalermo/AkosMed-BackEnd` criado.
-- [x] Documentação oficial v5 adicionada à branch `main`.
-- [x] README inicializado.
-- [x] Roadmap e guias técnicos versionados.
-- [ ] Projeto Spring Boot ainda não gerado.
-- [ ] H2 ainda não configurado.
-
-A criação do repositório, por si só, não conclui a ETAPA 0.1.
+Depois atualizar este arquivo e avançar para 0.2.
