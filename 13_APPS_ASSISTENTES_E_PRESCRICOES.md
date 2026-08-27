@@ -83,9 +83,186 @@ O usuário autenticado é convertido em Paciente pelo backend.
 - autoagendamento;
 - cancelamento/reagendamento;
 - documentos;
+- materiais terapêuticos enviados pelo profissional;
+- vídeos de orientação/exercícios;
 - solicitações para clínica.
 
 Essa ordem permite lançar um app útil antes de construir um fluxo completo de atendimento digital.
+
+---
+
+# Materiais terapêuticos e vídeos para o paciente
+
+## Objetivo
+
+Permitir que um profissional envie ao paciente uma orientação reutilizável e segura após o atendimento.
+
+Exemplo principal:
+
+```text
+Fisioterapeuta
+→ seleciona o paciente
+→ envia/associa vídeo demonstrando o exercício correto
+→ adiciona título e instruções
+→ paciente visualiza no AkosMed Patient
+```
+
+O recurso não deve ser modelado apenas como "vídeo de fisioterapia". Criar um conceito mais genérico para permitir evolução para:
+
+- exercícios de fisioterapia;
+- orientações pós-operatórias;
+- exercícios de fonoaudiologia;
+- cuidados de enfermagem;
+- orientações nutricionais;
+- PDFs, imagens ou links educativos no futuro.
+
+## Modelo sugerido
+
+```text
+OrientacaoPaciente
+```
+
+Campos planejados:
+
+```text
+id
+publicId
+tenant
+paciente
+profissional
+atendimento nullable
+titulo
+descricao
+tipo
+storageKey nullable
+urlExterna nullable
+mimeType nullable
+duracaoSegundos nullable
+visivelAPartirDe nullable
+expiraEm nullable
+ativo
+createdAt
+```
+
+Enum inicial:
+
+```text
+TipoOrientacaoPaciente
+VIDEO
+DOCUMENTO
+LINK
+TEXTO
+```
+
+Para a primeira implementação do app, `VIDEO` pode ser o único tipo utilizado, mantendo o domínio preparado para expansão.
+
+## Relacionamentos
+
+```text
+Paciente 1:N OrientacaoPaciente
+ProfissionalSaude 1:N OrientacaoPaciente
+Atendimento 1:N OrientacaoPaciente (opcional)
+```
+
+A orientação deve sempre pertencer ao mesmo tenant do paciente e do profissional.
+
+Quando vinculada a um atendimento, o Service deve validar que atendimento, paciente e profissional são compatíveis.
+
+## Storage
+
+Não armazenar o binário do vídeo diretamente no PostgreSQL.
+
+O banco guarda apenas metadata e referência do arquivo.
+
+Usar a abstração já planejada:
+
+```text
+StorageService
+```
+
+Desenvolvimento:
+
+```text
+filesystem local
+```
+
+Produção futura:
+
+```text
+S3 / storage compatível
+```
+
+Evitar URL pública permanente do vídeo. Quando possível, o backend deve gerar URL temporária/assinada após validar autorização.
+
+## Endpoints planejados
+
+Paciente autenticado:
+
+```http
+GET /api/v1/me/orientacoes
+GET /api/v1/me/orientacoes/{orientacaoPublicId}
+```
+
+Profissional autorizado:
+
+```http
+POST /api/v1/pacientes/{pacientePublicId}/orientacoes
+GET  /api/v1/pacientes/{pacientePublicId}/orientacoes
+DELETE /api/v1/pacientes/{pacientePublicId}/orientacoes/{orientacaoPublicId}
+```
+
+O `DELETE` deve representar inativação/remoção lógica quando houver necessidade de preservar histórico/auditoria.
+
+O fluxo exato de upload pode ser definido somente quando o `StorageService` estiver estabilizado.
+
+## DTOs esperados
+
+```text
+CriarOrientacaoPacienteDTO
+OrientacaoPacienteResponseDTO
+OrientacaoPacienteResumoDTO
+```
+
+`ResponseDTO` nunca expõe `id Long`, `storageKey` interno ou caminho físico do arquivo.
+
+## Segurança e privacidade
+
+- paciente só acessa orientações vinculadas a ele;
+- profissional só envia material dentro do tenant autorizado;
+- não aceitar `tenantId` vindo do cliente;
+- URLs de mídia não devem permitir acesso cross-tenant;
+- registrar criação/remoção em auditoria quando o módulo estiver ativo;
+- definir limite de tamanho e tipos MIME aceitos antes de liberar upload em produção;
+- não permitir arquivos executáveis;
+- considerar o vídeo/material parte dos dados relacionados ao cuidado do paciente e aplicar os mesmos cuidados de privacidade do restante do sistema.
+
+## Experiência do app
+
+No AkosMed Patient, criar uma área como:
+
+```text
+Orientações do profissional
+```
+
+Cada item pode mostrar:
+
+- profissional responsável;
+- título;
+- instrução curta;
+- data de envio;
+- vídeo/material;
+- vínculo com consulta/atendimento quando existir.
+
+Exemplo:
+
+```text
+Exercício para mobilidade do ombro
+Enviado por: Fisioterapeuta
+Orientação: 3 séries de 10 repetições, respeitando o limite de dor.
+[Assistir vídeo]
+```
+
+O app não deve permitir que o paciente altere o conteúdo clínico enviado pelo profissional.
 
 ---
 
@@ -235,14 +412,16 @@ Isso atende boa parte das necessidades administrativas com muito menos complexid
 ## Posição no roadmap oficial
 
 ```text
-ETAPA 7  → estrutura de prescrição
+ETAPA 7  → estrutura de prescrição + StorageService/AnexoClinico
 ETAPA 8  → endpoints operacionais que servirão ao futuro assistente
-ETAPA 15 → API do paciente
-ETAPA 16 → aplicativo Kotlin
+ETAPA 15 → API do paciente + endpoints de orientações/materiais
+ETAPA 16 → aplicativo Kotlin + área de orientações/vídeos
 ETAPA 17 → Akos Assistant
 ```
 
 O app e o bot não serão desenvolvidos antes das APIs correspondentes estarem estáveis.
+
+O upload/streaming de vídeo só entra depois da abstração de storage, autenticação e isolamento multi-tenant estarem validados.
 
 
 ---
