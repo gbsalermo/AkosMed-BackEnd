@@ -39,8 +39,8 @@ ETAPA 11 — PostgreSQL + Flyway + Testcontainers
 ETAPA 12 — Swagger / OpenAPI
 ETAPA 13 — Postman + validação ponta a ponta
 ETAPA 14 — Fechamento Backend MVP 1.0
-ETAPA 15 — API do paciente
-ETAPA 16 — AkosMed Patient / Kotlin
+ETAPA 15 — API do paciente + orientações/materiais terapêuticos
+ETAPA 16 — AkosMed Patient / Kotlin + área de orientações e vídeos
 ETAPA 17 — Akos Assistant
 ETAPA 18 — Especializações
 ETAPA 19 — Módulos adicionais / integrações
@@ -353,6 +353,64 @@ Referência: `22_CONCORRENCIA_IDEMPOTENCIA_CLOCK_OPERACAO.md`.
 
 ---
 
+## 4.13 Materiais terapêuticos e vídeos do paciente
+
+O AkosMed Patient terá, após o Backend MVP 1.0, suporte a materiais enviados pelo profissional ao paciente.
+
+Caso inicial:
+
+```text
+Fisioterapeuta
+→ paciente
+→ vídeo demonstrando o exercício correto
+→ instruções de execução
+→ visualização no app Kotlin
+```
+
+Não modelar o recurso exclusivamente como `VideoFisioterapia`.
+
+Usar conceito genérico:
+
+```text
+OrientacaoPaciente
+```
+
+Tipos previstos:
+
+```text
+VIDEO
+DOCUMENTO
+LINK
+TEXTO
+```
+
+O vídeo é o primeiro caso de uso, mas o mesmo domínio pode atender orientações pós-operatórias, fonoaudiologia, enfermagem, nutrição e outros acompanhamentos.
+
+Regras principais:
+
+- `OrientacaoPaciente` usa `id Long` interno + `publicId UUID` externo;
+- paciente, profissional e atendimento, quando informado, pertencem ao mesmo tenant;
+- paciente só acessa orientações vinculadas a ele;
+- profissional só envia material dentro do tenant autorizado;
+- binário de vídeo não fica no PostgreSQL;
+- banco guarda metadata e referência do arquivo;
+- usar `StorageService` para filesystem local no desenvolvimento e storage compatível com S3 em produção futura;
+- evitar URL pública permanente; preferir URL temporária/assinada após autorização;
+- limitar tamanho e MIME types antes de liberar upload em produção;
+- conteúdo enviado pelo profissional não é editável pelo paciente.
+
+Posição:
+
+```text
+ETAPA 7  → estabilizar StorageService/AnexoClinico
+ETAPA 15 → API `/me/orientacoes` + operações do profissional
+ETAPA 16 → tela "Orientações do profissional" no app Kotlin
+```
+
+Detalhes: `13_APPS_ASSISTENTES_E_PRESCRICOES.md`.
+
+---
+
 # 5. MODELO CLÍNICO PRINCIPAL
 
 ```text
@@ -360,6 +418,7 @@ Tenant
 ├── Unidade
 ├── Pessoa
 │   ├── Paciente
+│   │   ├── OrientacaoPaciente
 │   │   └── Prontuario
 │   │       └── Atendimento
 │   │           ├── EvolucaoClinica
@@ -378,6 +437,8 @@ Tenant
 ```
 
 Modelo canônico: `04_ENTIDADES_E_RELACIONAMENTOS.md`.
+
+`OrientacaoPaciente` é evolução planejada pós-MVP e não deve ser antecipada durante as etapas do Core.
 
 ---
 
@@ -469,6 +530,10 @@ JPA:
 ## Consistência/tempo/operação
 
 - `22_CONCORRENCIA_IDEMPOTENCIA_CLOCK_OPERACAO.md`
+
+## Apps, orientações, vídeos e prescrições
+
+- `13_APPS_ASSISTENTES_E_PRESCRICOES.md`
 
 ## Antes de marcar concluído
 
