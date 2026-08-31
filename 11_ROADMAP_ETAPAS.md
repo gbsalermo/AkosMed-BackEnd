@@ -244,15 +244,13 @@ id
 publicId
 nome
 nomeFantasia
-a slug
+slug
 documento
 status
 timezone
 createdAt
 updatedAt
 ```
-
-> Corrigir o nome de campo real para `slug`; a linha acima representa o conjunto conceitual, não uma assinatura Java.
 
 Métodos esperados:
 
