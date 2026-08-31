@@ -8,25 +8,55 @@
 **Identificador externo:** `UUID publicId` obrigatório  
 **PK interna:** `Long id`  
 **Concorrência crítica:** agendamento protegido contra double booking  
-**Objetivo da documentação:** permitir implementar e revisar a API com segurança mesmo sem revisão direta dentro do repositório.
+**Objetivo da documentação:** permitir implementar, revisar e retomar a API com segurança mesmo quando outra IA ou ferramenta não possuir o histórico do projeto.
 
 ---
 
-# Como trabalhar com esta documentação
+# Comece por aqui
 
-Há dois documentos principais:
+Para assumir o projeto em uma nova sessão, leia nesta ordem:
 
-1. **`CONTINUIDADE.md`**  
-   Estado real do projeto, decisões oficiais, etapa atual e próxima tarefa.
+1. **`CONTINUIDADE.md`** — estado real, etapa atual, decisões vigentes e próxima tarefa;
+2. **`00_DOSSIE_PROJETO_AKOSMED.md`** — visão consolidada para handoff humano/IA;
+3. **`11_ROADMAP_ETAPAS.md`** — ordem executável de desenvolvimento;
+4. documentos técnicos da subetapa atual;
+5. **`19_CHECKLIST_REVISAO_QUALIDADE.md`** antes de marcar a subetapa como concluída.
 
-2. **`11_ROADMAP_ETAPAS.md`**  
-   Ordem executável de desenvolvimento, dividida em etapas e subetapas.
+Não crie um novo roadmap em uma nova sessão e não reorganize as etapas por preferência própria.
 
-Os demais documentos funcionam como **manual técnico e checklist de revisão**.
+Quando houver dúvida entre documentos sobre **estado ou sequência**:
 
-Quando houver dúvida entre dois arquivos:
+```text
+CONTINUIDADE.md → estado/decisões atuais
+11_ROADMAP_ETAPAS.md → ordem executável
+```
 
-> `CONTINUIDADE.md` + `11_ROADMAP_ETAPAS.md` têm prioridade para ordem de execução.
+Se existir divergência técnica real entre arquivos, não escolher silenciosamente uma versão: registrar/corrigir a divergência antes de implementar a regra.
+
+---
+
+# Estado atual
+
+**Status em 2026-08-31:** documentação revisada; implementação Spring Boot ainda não iniciada.
+
+O repositório ainda não possui como etapa concluída:
+
+```text
+pom.xml
+src/main/java
+src/test/java
+CRUDs
+configuração H2
+PostgreSQL
+Swagger
+Postman oficial
+```
+
+Próxima tarefa oficial:
+
+> **ETAPA 0.1 — Gerar o projeto Spring Boot Maven com Java 21 e H2 no repositório existente.**
+
+Detalhes e aceite: `CONTINUIDADE.md` e `11_ROADMAP_ETAPAS.md`.
 
 ---
 
@@ -96,28 +126,32 @@ Fechamento MVP
 Implementar **verticalmente**, uma subetapa por vez:
 
 ```text
-Entity
-  ↓
+Regra
+↓
+Entity / Enum
+↓
 DTOs
-  ↓
+↓
 Repository
-  ↓
+↓
 Service
-  ↓
+↓
 Controller
-  ↓
+↓
 Validações / Exceptions
-  ↓
+↓
 Testes automatizados
-  ↓
+↓
 Execução local
-  ↓
+↓
+Checklist de qualidade
+↓
 Atualizar CONTINUIDADE
-  ↓
+↓
 Commit
 ```
 
-Não criar todas as entities antes de começar os Services.
+Não criar todas as Entities antes de começar os Services e não desenvolver vários CRUDs em paralelo sem concluir a subetapa aberta.
 
 ---
 
@@ -125,11 +159,12 @@ Não criar todas as entities antes de começar os Services.
 
 | Arquivo | Função |
 |---|---|
+| `00_DOSSIE_PROJETO_AKOSMED.md` | Handoff consolidado para outra IA/pessoa |
 | `CONTINUIDADE.md` | Estado oficial, decisões e próxima tarefa |
 | `01_VISAO_E_ESCOPO.md` | Visão do produto e limites |
 | `02_ARQUITETURA.md` | Organização do backend |
 | `03_MULTI_TENANCY_E_SEGURANCA.md` | Isolamento, autenticação e autorização |
-| `04_ENTIDADES_E_RELACIONAMENTOS.md` | Modelo de domínio |
+| `04_ENTIDADES_E_RELACIONAMENTOS.md` | Modelo canônico do domínio MVP |
 | `05_BANCO_DE_DADOS.md` | H2 no desenvolvimento e PostgreSQL no fechamento |
 | `06_APIS_CRUDS_E_REGRAS.md` | Catálogo de endpoints e regras |
 | `07_AGENDA_E_ATENDIMENTO.md` | Disponibilidade, bloqueios e fluxo de consulta |
@@ -138,14 +173,14 @@ Não criar todas as entities antes de começar os Services.
 | `10_TESTES_E_QUALIDADE.md` | Estratégia de testes |
 | `11_ROADMAP_ETAPAS.md` | Sequência executável |
 | `12_IDEIAS_FUTURAS_E_NOMES.md` | Evoluções de produto |
-| `13_APPS_ASSISTENTES_E_PRESCRICOES.md` | Akos Assistant, Kotlin e prescrições |
+| `13_APPS_ASSISTENTES_E_PRESCRICOES.md` | Akos Assistant, Kotlin, prescrições e orientações/vídeos |
 | `14_GUIA_IMPLEMENTACAO_PRATICA.md` | Como implementar uma feature |
 | `15_PADROES_ENTIDADES_DTOS_REPOSITORIES.md` | Padrões concretos de Entity/DTO/Repository |
 | `16_RELACIONAMENTOS_JPA_CASCADE_FETCH.md` | Relacionamentos JPA, cascade e fetch |
 | `17_PADROES_HTTP_ERROS_PAGINACAO.md` | Contratos HTTP e respostas |
 | `18_MAPA_METODOS_SERVICES.md` | Métodos esperados por módulo |
 | `19_CHECKLIST_REVISAO_QUALIDADE.md` | Checklist para revisar cada etapa |
-| `20_GUIA_USO_IA_PARA_REVISAO.md` | Como usar IA externa como segunda revisão |
+| `20_GUIA_USO_IA_PARA_REVISAO.md` | Como outra IA deve revisar sem desviar do projeto |
 | `21_PUBLIC_ID_E_CONCORRENCIA.md` | Regra oficial de publicId e controle de concorrência |
 | `22_CONCORRENCIA_IDEMPOTENCIA_CLOCK_OPERACAO.md` | Optimistic lock, idempotência, Clock, correlation ID, health, backup e operação |
 
@@ -158,6 +193,12 @@ Tenant
 ├── Unidade
 ├── Pessoa
 │   ├── Paciente
+│   │   └── Prontuario
+│   │       └── Atendimento
+│   │           ├── EvolucaoClinica
+│   │           ├── Prescricao
+│   │           │   └── ItemPrescricao
+│   │           └── AnexoClinico
 │   └── ProfissionalSaude
 ├── UsuarioTenant
 │   └── UsuarioUnidade
@@ -165,25 +206,11 @@ Tenant
 ├── Procedimento
 ├── DisponibilidadeProfissional
 ├── BloqueioAgenda
-├── Agendamento
-│   └── EventoAgendamento
-└── Prontuario
-    └── Atendimento
-        ├── EvolucaoClinica
-        ├── Prescricao
-        │   └── ItemPrescricao
-        └── AnexoClinico
+└── Agendamento
+    └── EventoAgendamento
 ```
 
----
-
-# Status atual
-
-**Planejamento revisado e pronto para implementação.**
-
-Próxima tarefa oficial:
-
-> **ETAPA 0.1 — Gerar o projeto Spring Boot com H2 no repositório existente.**
+`OrientacaoPaciente` é uma evolução planejada **pós-MVP**, detalhada em `13_APPS_ASSISTENTES_E_PRESCRICOES.md`, e não deve ser antecipada durante o Core.
 
 ---
 
@@ -191,14 +218,26 @@ Próxima tarefa oficial:
 
 ## Public ID
 
-Toda entidade persistida do AkosMed usa:
+Toda Entity persistida do AkosMed usa:
 
 ```text
 id Long        → somente banco/backend
-publicId UUID  → API, DTOs, URLs, integrações
+publicId UUID  → API, DTOs, URLs, integrações e apps
 ```
 
-A API nunca deve devolver ou exigir o `Long id`.
+A API nunca deve devolver ou exigir o `Long id` como identificador de recurso.
+
+Relacionamentos em requests usam `...PublicId`.
+
+## Multi-tenancy
+
+Modelo:
+
+```text
+Shared Database + Shared Schema + tenant_id
+```
+
+O tenant vem do contexto autenticado. Nunca confiar em `tenantId` livre do request.
 
 ## Concorrência de agendamento
 
@@ -217,17 +256,17 @@ Resultado obrigatório:
 1 resposta 409 AGENDAMENTO_CONFLITO
 ```
 
-Proteção:
+Proteção planejada:
 
 ```text
 @Transactional
 → lock pessimista no profissional
 → revalidar disponibilidade
-→ validação de overlap
+→ validar bloqueios/overlap
 → insert
 ```
 
-Na migração para PostgreSQL, avaliar/adicionar exclusion constraint como segunda barreira.
+Na migração para PostgreSQL, validar com Testcontainers e avaliar/adicionar exclusion constraint como segunda barreira.
 
 ## Consistência e operação
 
@@ -235,22 +274,30 @@ O produto também adota:
 
 ```text
 @Version seletivo
-→ evita lost update em cadastros mutáveis
-
 Clock centralizado
-→ permite regras temporais determinísticas e testáveis
-
 Idempotency-Key quando necessário
-→ evita efeito duplicado por retry
-
 X-Correlation-Id
-→ rastreabilidade ponta a ponta
-
-Health checks
-Backup + restore testado
-Secrets fora do Git
-Limites de upload
-Matriz de autorização por perfil
+health checks
+backup + restore testado
+secrets fora do Git
+limites de upload
+matriz de autorização por perfil
 ```
 
-Esses mecanismos entram nas etapas corretas. Não devem virar infraestrutura genérica antes da necessidade.
+Esses mecanismos entram nas etapas corretas; não devem virar infraestrutura genérica antecipada.
+
+---
+
+# Evolução pós-MVP já decidida
+
+Depois do Backend MVP 1.0:
+
+```text
+ETAPA 15 → API do paciente + orientações/materiais terapêuticos
+ETAPA 16 → AkosMed Patient em Kotlin + orientações/vídeos
+ETAPA 17 → Akos Assistant
+```
+
+O primeiro caso de uso de `OrientacaoPaciente` é permitir que um fisioterapeuta envie ao paciente um vídeo demonstrando a execução correta de um exercício, mantendo o domínio genérico para `VIDEO`, `DOCUMENTO`, `LINK` e `TEXTO`.
+
+Detalhes: `13_APPS_ASSISTENTES_E_PRESCRICOES.md`.
