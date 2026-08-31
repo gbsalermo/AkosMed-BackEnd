@@ -2,13 +2,27 @@
 
 # Objetivo
 
-Cada etapa deve ser confiável antes de avançar.
+Cada subetapa deve ser confiável antes de avançar.
 
-A validação será feita em três momentos diferentes.
+No AkosMed, qualidade não significa apenas “teste escrito”. Significa:
+
+```text
+regra implementada
++
+teste executado
++
+contrato publicId correto
++
+isolamento tenant validado
++
+comportamento real conferido
+```
+
+A validação acontece em três fases principais.
 
 ---
 
-# FASE 1 — Durante o Core com H2
+# FASE 1 — Core com H2
 
 Ferramentas:
 
@@ -19,7 +33,7 @@ Spring Boot Test
 H2
 ```
 
-Tipos:
+Tipos de teste:
 
 - unitário;
 - repository;
@@ -27,11 +41,11 @@ Tipos:
 - controller;
 - integração.
 
-Não exigir Swagger/Postman nessa fase.
+Não exigir PostgreSQL, Swagger ou Postman nesta fase.
 
 ---
 
-# Teste unitário
+# 1. Teste unitário
 
 Usar quando a regra puder ser isolada.
 
@@ -40,186 +54,424 @@ Exemplos:
 - transição de status;
 - cálculo de duração;
 - validação de datas;
-- escolha de override de procedimento.
+- escolha de override de procedimento;
+- regras de ativação/inativação;
+- cálculo baseado em `Clock`.
+
+Para regras temporais:
+
+```java
+Clock.fixed(...)
+```
+
+Evitar testes dependentes do horário real da máquina.
 
 ---
 
-# Repository test
+# 2. Repository test
 
 Validar queries importantes.
 
-Principalmente:
+Padrões tenant-scoped:
 
 ```text
-findByIdAndTenantId
+findByPublicIdAndTenantId
+findAllByTenantId
 existsBy...AndTenantId
-busca de conflito
-filtros por período
 ```
+
+Validar também:
+
+- unicidade lógica;
+- filtros por período;
+- busca de overlap;
+- ordenação/paginação quando relevante;
+- lock JPA quando a etapa exigir.
+
+Não criar teste que normalize `findById(Long idDoCliente)` como padrão de entrada pública.
+
+O `Long id` pode aparecer em teste interno de persistência, FK ou query interna, mas não como contrato da API.
 
 ---
 
-# Service test
+# 3. Testes de publicId
 
-É a prioridade.
+Para cada recurso persistido exposto externamente, verificar conforme aplicável:
 
-O Service concentra regra de negócio.
+- `publicId` é gerado automaticamente;
+- é único;
+- não muda em update;
+- CreateDTO não permite escolher `publicId`;
+- ResponseDTO não expõe `Long id`;
+- path usa UUID;
+- relação recebida pela API usa `...PublicId`;
+- UUID inexistente retorna 404;
+- UUID de outro Tenant retorna 404.
+
+Referência: `21_PUBLIC_ID_E_CONCORRENCIA.md`.
+
+---
+
+# 4. Service test
+
+É a prioridade para regras de negócio.
 
 Testar:
 
 - happy path;
 - recurso inexistente;
-- tenant incorreto;
+- Tenant incorreto;
 - status inválido;
 - relacionamento incompatível;
 - duplicidade;
-- conflito.
+- conflito;
+- autorização relevante;
+- lost update quando `@Version` for usado;
+- idempotência quando adotada;
+- tempo com `Clock` quando aplicável.
+
+O Service deve ser testado como fronteira de regra/transação, não apenas como delegador de Repository.
 
 ---
 
-# Controller test
+# 5. Controller test
 
 Validar:
 
 - status HTTP;
 - `@Valid`;
 - body;
+- UUID em paths;
+- erro padronizado;
+- `correlationId`;
 - exceptions convertidas;
-- autenticação quando entrar Security.
+- autenticação/autorização quando Spring Security entrar;
+- ausência de `Long id` no contrato.
+
+Não testar regra de domínio complexa apenas no Controller.
 
 ---
 
-# Multi-tenant
+# 6. Multi-tenant
 
-Todo módulo tenant-scoped precisa de pelo menos um teste de isolamento.
+Todo módulo tenant-scoped precisa de testes de isolamento.
 
-Padrão:
+Padrão mínimo:
 
 ```text
 Tenant A → recurso A
 Tenant B → usuário B
 
-B tenta acessar A
+B tenta acessar publicId de A
 ↓
-não retorna recurso
+404 / não retorna recurso
 ```
+
+Cobrir leitura e escrita quando a feature permitir ambos.
+
+Também testar relacionamento cruzado:
+
+```text
+request no Tenant A
+usa profissionalPublicId do Tenant B
+↓
+falha
+```
+
+Não basta filtrar listagem; criação/atualização de relacionamentos também deve ser tenant-safe.
 
 ---
 
-# Agenda
+# 7. Segurança/autenticação
+
+A partir da ETAPA 2, validar:
+
+- login válido/inválido;
+- Tenant inexistente/suspenso;
+- `UsuarioTenant` inativo;
+- token expirado/inválido;
+- refresh revogado;
+- perfil permitido/negado;
+- acesso por Unidade;
+- paciente acessando somente os próprios dados em `/me`.
+
+Claims tenant-scoped devem seguir o contrato por publicId:
+
+```text
+usuarioPublicId
+tenantPublicId
+usuarioTenantPublicId
+perfilTenant
+```
+
+Não tornar IDs `Long` sequenciais parte esperada do contrato de JWT.
+
+---
+
+# 8. Agenda e disponibilidade
 
 Testes obrigatórios:
 
 - profissional sem disponibilidade;
-- unidade incorreta;
+- Unidade incorreta;
 - procedimento não habilitado;
 - bloqueio;
 - horário fora da janela;
-- overlap;
+- overlap total;
+- overlap parcial;
+- intervalo adjacente permitido;
 - duração override;
 - reagendamento conflitante;
-- status inválido.
+- status inválido;
+- Tenant incorreto.
+
+Regra de overlap:
+
+```text
+existing.inicio < novoFim
+AND
+existing.fim > novoInicio
+```
+
+Intervalo:
+
+```text
+[inicio, fim)
+```
 
 ---
 
-# Prontuário
+# 9. Agendamento e concorrência
+
+## H2/Core
+
+Testar funcionalmente:
+
+- slot livre;
+- slot ocupado;
+- criação e reagendamento usando a mesma regra;
+- status que bloqueiam/liberam agenda;
+- lock JPA configurado quando a ETAPA 5 chegar;
+- teste concorrente básico quando viável.
+
+A garantia final não é declarada apenas porque H2 passou.
+
+## Resultado de domínio esperado
+
+Duas tentativas para o mesmo profissional/slot:
+
+```text
+1 sucesso
+1 AGENDAMENTO_CONFLITO
+```
+
+Nunca dois agendamentos ativos sobrepostos.
+
+Referência: `21_PUBLIC_ID_E_CONCORRENCIA.md`.
+
+---
+
+# 10. Prontuário
 
 Testar:
 
 - criação sob demanda;
-- apenas um prontuário por paciente;
+- apenas um prontuário por paciente/Tenant;
 - atendimento compatível;
 - evolução criada;
 - retificação preserva original;
-- ausência de delete destrutivo.
+- ausência de delete destrutivo;
+- cross-tenant;
+- acesso não autorizado;
+- histórico não sobrescrito silenciosamente.
 
 ---
 
-# Prescrição
+# 11. Prescrição
 
 Testar:
 
-- rascunho;
+- criação em RASCUNHO;
 - adicionar item;
 - editar item;
 - remover item;
 - emitir;
 - bloquear edição após emissão;
 - cancelamento;
-- acesso cross-tenant negado.
+- paciente derivado do Atendimento/Prontuário;
+- acesso cross-tenant negado;
+- idempotência de emissão quando a decisão for implementada.
+
+---
+
+# 12. Anexos/storage
+
+Quando a ETAPA 7 chegar, testar:
+
+- metadata correta;
+- Tenant/ownership antes de abrir storage;
+- arquivo inexistente;
+- inativação/remoção lógica quando aplicável;
+- nenhum `storageKey` interno exposto em DTO;
+- limites/MIME conforme o nível de implementação da etapa;
+- falha de storage não deixando metadata inconsistente.
+
+---
+
+# 13. Optimistic locking
+
+Quando uma Entity usar `@Version`, criar cenário com duas atualizações baseadas no mesmo estado.
+
+Resultado:
+
+```text
+1 atualização vence
+1 conflito
+HTTP 409 RESOURCE_VERSION_CONFLICT na fronteira REST
+```
+
+Nunca permitir que a versão antiga sobrescreva silenciosamente a nova.
+
+---
+
+# 14. Idempotência
+
+Quando uma operação realmente adotar `Idempotency-Key`, testar:
+
+```text
+mesma key + mesmo payload
+→ mesmo efeito/resultado lógico
+→ nenhum duplicado
+
+mesma key + payload diferente
+→ 409 IDEMPOTENCY_KEY_REUSED
+```
+
+Candidatas principais:
+
+- criação de agendamento;
+- emissão de prescrição.
+
+Não criar esses testes antes de a infraestrutura existir na etapa correspondente.
 
 ---
 
 # FASE 2 — PostgreSQL/Testcontainers
 
-Entrada:
+Entrada oficial:
 
 ```text
 ETAPA 11
 ```
 
-Reexecutar cenários críticos no PostgreSQL real.
+Adicionar/reexecutar cenários críticos em PostgreSQL real via Testcontainers.
 
-Obrigatório:
+Obrigatório validar:
 
-- migrations;
+- migrations Flyway;
 - constraints;
-- multi-tenant;
+- tipos PostgreSQL;
+- multi-tenancy;
+- locks;
 - concorrência;
-- lock;
 - queries de período;
 - paginação;
-- transações.
+- transações;
+- timezone/instantes;
+- índices e comportamento de queries críticas quando necessário.
 
 ---
 
-# Teste de concorrência
+# 15. Teste real de double booking
 
 Cenário:
 
 ```text
 profissional P
-horário 14:00–14:30
+slot 14:00–14:30
 
-thread A tenta reservar
-thread B tenta reservar
+transação A tenta reservar
+transação B tenta reservar
 ```
 
-Resultado:
+Estratégia esperada:
+
+```text
+PESSIMISTIC_WRITE no profissional
+→ uma transação prossegue
+→ a outra espera
+→ revalida
+```
+
+Resultado obrigatório:
 
 ```text
 1 sucesso
 1 conflito
+0 overlaps persistidos
 ```
 
-Nunca dois agendamentos.
+Repetir também para reagendamento concorrente.
+
+Na ETAPA 11, avaliar/adicionar exclusion constraint PostgreSQL como segunda barreira.
+
+A ETAPA 11 não é concluída se corrida concorrente ainda permitir overlap.
 
 ---
 
-# FASE 3 — Postman
+# 16. Testes de migration
 
-Somente após Swagger.
+Validar que um banco limpo consegue executar todas as migrations na ordem correta.
 
-Objetivo:
+Verificar:
 
-validação ponta a ponta da API já estabilizada.
+- FKs;
+- unique constraints;
+- nullability;
+- tipos;
+- índices necessários;
+- exclusion constraint quando adotada;
+- `ddl-auto=validate` compatível com as Entities.
 
-Criar:
-
-- happy paths;
-- erros principais;
-- autenticação;
-- multi-tenant;
-- fluxos completos.
+Não aceitar migration “funcionando” apenas em banco já alterado manualmente.
 
 ---
 
-# Fluxo E2E mínimo
+# FASE 3 — Swagger + Postman
+
+Swagger entra:
 
 ```text
-cria tenant
+ETAPA 12
+```
+
+Postman entra:
+
+```text
+ETAPA 13
+```
+
+Postman valida ponta a ponta a API já estabilizada no banco definitivo.
+
+Criar cenários de:
+
+- happy path;
+- erros principais;
+- autenticação;
+- publicId;
+- multi-tenant;
+- autorização;
+- conflitos;
+- fluxo completo.
+
+---
+
+# 17. Fluxo E2E mínimo do MVP
+
+```text
+cria Tenant
 ↓
-cria unidade
+cria Unidade
 ↓
 cria usuário/admin
 ↓
@@ -246,9 +498,31 @@ prescrição
 conclui
 ```
 
+Todos os identificadores HTTP do fluxo usam `publicId`.
+
+Adicionar variações negativas de cross-tenant e conflito.
+
 ---
 
-# Regra de status
+# 18. Pós-MVP — OrientacaoPaciente
+
+Somente quando a ETAPA 15 chegar, testar:
+
+- profissional envia orientação ao paciente correto;
+- paciente só lista as próprias orientações;
+- UUID de orientação de outro paciente/Tenant não é acessível;
+- atendimento opcional é compatível com paciente/profissional;
+- `storageKey` não aparece no DTO;
+- URL de mídia exige autorização e é temporária/assinada quando suportada;
+- MIME/tamanho são validados;
+- remoção preserva regra de auditoria/histórico definida;
+- conteúdo enviado não pode ser alterado pelo paciente.
+
+Não implementar esses testes no Core apenas porque o recurso já está planejado.
+
+---
+
+# 19. Regra de status de conclusão
 
 Teste escrito não significa concluído.
 
@@ -256,22 +530,39 @@ Registrar `[x]` somente quando:
 
 - teste foi executado;
 - resultado esperado ocorreu;
-- falha foi corrigida;
-- `mvn test` está verde.
+- falha encontrada foi corrigida;
+- `mvn test` está verde;
+- não há teste ignorado escondendo requisito crítico;
+- `CONTINUIDADE.md` registra o estado real.
 
 ---
 
-# Definition of Done de uma subetapa
+# 20. Definition of Done de uma subetapa
 
 ```text
 [x] regra implementada
+[x] publicId/contrato revisado
 [x] testes executados
 [x] tenant isolation revisado
 [x] relacionamentos revisados
 [x] exceptions revisadas
+[x] Clock/concorrência/idempotência avaliados quando aplicável
 [x] código sem TODO crítico
+[x] checklist 19 executado
 [x] CONTINUIDADE atualizado
 [x] commit
 ```
 
 Swagger/Postman só entram nas respectivas etapas finais.
+
+---
+
+# Regra final
+
+```text
+planejado ≠ implementado
+implementado ≠ testado
+testado uma vez ≠ seguro em outro banco/concorrência
+```
+
+Marcar etapa como concluída somente com evidência executada na fase correta.
