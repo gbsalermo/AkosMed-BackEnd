@@ -1,6 +1,11 @@
 # 03 — Multi-Tenancy e Segurança
 
-## Estratégia
+> Este documento define o modelo de isolamento, autenticação e autorização.  
+> Para saber **em qual etapa o projeto está**, leia primeiro `CONTINUIDADE.md` e `00_DOSSIE_PROJETO_AKOSMED.md`.
+
+---
+
+# 1. Estratégia multi-tenant
 
 MVP:
 
@@ -8,28 +13,51 @@ MVP:
 Shared Database + Shared Schema
 ```
 
-Toda entidade de domínio relevante possui:
+Toda entidade de domínio que pertence a uma organização deve possuir vínculo com:
 
 ```text
-tenant_id
+Tenant
 ```
 
-## Tenant
-
-Campos práticos:
+No banco isso resulta em:
 
 ```text
-id
+tenant_id BIGINT
+```
+
+O `tenant_id` é interno. O contrato HTTP não recebe esse identificador livremente do cliente.
+
+---
+
+# 2. Tenant
+
+Campos conceituais principais:
+
+```text
+id Long
+publicId UUID
 nome
+nomeFantasia nullable
 slug
+documento nullable
 status
 timezone
-criado_em
+createdAt
+updatedAt
 ```
 
-`slug` é único e pode ser usado na autenticação.
+`slug` é único globalmente e pode participar do fluxo de autenticação.
 
-## Login
+Identificação:
+
+```text
+id       → somente backend/banco
+publicId → API, DTOs, JWT quando aplicável e integrações
+```
+
+---
+
+# 3. Login tenant-scoped
 
 Request sugerida:
 
@@ -43,81 +71,176 @@ Request sugerida:
 
 Processo:
 
-1. validar `Usuario`;
-2. localizar `Tenant` pelo slug;
-3. validar `UsuarioTenant` ativo;
-4. gerar token com tenant ativo.
+1. localizar/validar `Usuario` pela credencial;
+2. localizar `Tenant` pelo `slug`;
+3. validar status do Tenant;
+4. localizar `UsuarioTenant` ativo;
+5. validar credencial;
+6. emitir token tenant-scoped.
 
-## Token
+O `tenantSlug` serve para selecionar o contexto de autenticação. Ele não autoriza acesso por si só.
 
-Claims mínimas em token tenant-scoped:
+---
+
+# 4. JWT
+
+## Token tenant-scoped
+
+Preferir claims externas baseadas em `publicId`:
 
 ```text
-sub/userId
-tenantId
-usuarioTenantId
+usuarioPublicId
+tenantPublicId
+usuarioTenantPublicId
 perfilTenant
 superAdmin=false
 ```
 
-Para administração global, um token específico pode conter `superAdmin=true` sem tenant ativo.
+O `sub` pode representar `usuarioPublicId`, desde que a convenção seja única e documentada.
 
-Não incluir dados clínicos ou lista enorme de unidades.
-
-## TenantContext
-
-Implementação simples:
+Não usar como contrato externo:
 
 ```text
-TenantContext.getTenantId()
+usuarioId Long
+tenantId Long
+usuarioTenantId Long
 ```
 
-Pode ser preenchido pelo filtro JWT por request.
+O filtro de segurança resolve os UUIDs públicos para as entidades/IDs internos necessários e mantém esses IDs apenas no contexto do servidor.
 
-O Service não recebe `tenantId` do DTO.
+## Administração global
 
-## Repository
-
-Padrão obrigatório:
+Um token administrativo específico pode conter:
 
 ```text
-findByIdAndTenantId
-existsBy...AndTenantId
-findAllByTenantId
+superAdmin=true
 ```
 
-## Regra de erro cross-tenant
+sem Tenant ativo, conforme o fluxo global definido para a plataforma.
 
-Quando um recurso não pertence ao tenant atual, responder preferencialmente como não encontrado.
+## Nunca incluir no token
+
+- dados clínicos;
+- prontuário;
+- CPF;
+- lista extensa de unidades;
+- senha/hash;
+- informações que não sejam necessárias para autenticação/autorização.
+
+Referência obrigatória: `21_PUBLIC_ID_E_CONCORRENCIA.md`.
+
+---
+
+# 5. TenantContext
+
+O contexto é preenchido pelo filtro de autenticação por request.
+
+Conceitualmente pode manter:
 
 ```text
-404
+tenantPublicId
+usuarioPublicId
+usuarioTenantPublicId
+perfilTenant
+```
+
+Após resolver/autenticar essas referências, também pode manter internamente:
+
+```text
+tenantId Long
+usuarioId Long
+usuarioTenantId Long
+```
+
+Esses IDs internos **não fazem parte do contrato HTTP**.
+
+O Service pode consultar:
+
+```text
+tenantContext.getTenantId()
+```
+
+para montar queries eficientes, desde que esse valor tenha sido resolvido pelo servidor e nunca recebido diretamente do DTO/request.
+
+O Controller não recebe `tenantId` para escolher o tenant de uma operação tenant-scoped.
+
+---
+
+# 6. Repository tenant-scoped
+
+Na fronteira de recursos acessados pela API, o padrão é:
+
+```text
+findByPublicIdAndTenantId(publicId, tenantIdInterno)
+findAllByTenantId(tenantIdInterno, pageable)
+existsBy...AndTenantId(..., tenantIdInterno)
+```
+
+Exemplo conceitual:
+
+```java
+Optional<Paciente> findByPublicIdAndTenantId(UUID publicId, Long tenantId);
+```
+
+Evitar em entrada pública:
+
+```text
+findById(Long id)
+findByIdAndTenantId(Long id, ...)
+```
+
+`findById(Long)` pode existir para uso estritamente interno quando o recurso já foi resolvido e autorizado e o ID não veio do cliente.
+
+---
+
+# 7. Regra de erro cross-tenant
+
+Quando um UUID existe, mas não pertence ao tenant atual, responder preferencialmente como recurso não encontrado:
+
+```text
+404 Not Found
 ```
 
 Isso evita confirmar a existência de recursos externos.
 
-## Usuário global e pessoa tenant-scoped
+Teste obrigatório:
+
+```text
+Tenant A cria recurso A
+Tenant B tenta buscar o publicId de A
+→ 404
+```
+
+UUID não substitui autorização.
+
+---
+
+# 8. Usuário global e Pessoa tenant-scoped
 
 ```text
 Usuario
-├── email
+├── publicId
+├── emailLogin
 ├── passwordHash
-├── ativo
+├── status
 └── superAdmin
 
 UsuarioTenant
+├── publicId
 ├── usuario
 ├── tenant
 ├── pessoa
-├── perfil
+├── perfilTenant
 └── acessoTodasUnidades
 ```
 
-`Pessoa` pertence ao tenant.
+`Pessoa` pertence ao Tenant.
 
-Assim, a mesma conta pode atuar em dois tenants sem compartilhar automaticamente dados pessoais entre eles.
+Assim, uma mesma credencial global pode participar de mais de um Tenant sem compartilhar automaticamente os dados de Pessoa entre organizações.
 
-## Perfis MVP
+---
+
+# 9. Perfis MVP
 
 Privilégio global:
 
@@ -125,7 +248,7 @@ Privilégio global:
 Usuario.superAdmin
 ```
 
-Perfis dentro do tenant:
+Perfis dentro do Tenant:
 
 ```text
 ADMIN_TENANT
@@ -135,31 +258,61 @@ PACIENTE
 AUDITOR
 ```
 
-Implementar `PerfilTenant` como enum + `@PreAuthorize`/regras no Service.
+Implementação inicial:
 
-Não criar tabela de permissões agora.
+```text
+PerfilTenant enum
++
+Spring Security / @PreAuthorize quando adequado
++
+validações de domínio no Service
+```
 
-## Unidade
+Não criar tabela dinâmica de permissões no MVP.
 
-Se `acessoTodasUnidades = true`, o usuário pode acessar qualquer unidade do tenant.
+Na ETAPA 9 consolidar a matriz:
 
-Caso contrário, validar `UsuarioUnidade`.
+```text
+recurso × perfil × ação
+```
 
-Criar:
+Referência: `22_CONCORRENCIA_IDEMPOTENCIA_CLOCK_OPERACAO.md`.
+
+---
+
+# 10. Acesso por Unidade
+
+Se:
+
+```text
+UsuarioTenant.acessoTodasUnidades = true
+```
+
+o usuário pode acessar as unidades permitidas pelo seu perfil dentro do Tenant.
+
+Caso contrário, validar vínculos em `UsuarioUnidade`.
+
+Criar quando a ETAPA 2 chegar:
 
 ```text
 UnitAccessService
 ```
 
-Responsabilidade:
+Responsabilidade conceitual:
 
 ```text
-assertCanAccess(unidadeId)
+assertCanAccess(unidadePublicId ou Unidade já resolvida)
 ```
 
-## Paciente autenticado
+Internamente o Service pode trabalhar com IDs numéricos depois da resolução/autorização.
 
-Para perfil PACIENTE:
+Nunca aceitar `unidadeId Long` livre do cliente.
+
+---
+
+# 11. Paciente autenticado
+
+Para perfil `PACIENTE`:
 
 ```text
 UsuarioTenant.pessoa
@@ -169,9 +322,24 @@ Paciente.pessoa
 
 A API `/me` resolve o paciente a partir do usuário autenticado.
 
-Nunca aceitar `pacienteId` do app para acessar dados próprios.
+Nunca pedir ao app:
 
-## Profissional autenticado
+```text
+pacienteId
+pacientePublicId
+```
+
+para acessar os próprios dados do paciente.
+
+Essa regra também vale para futuras orientações/materiais em:
+
+```text
+GET /api/v1/me/orientacoes
+```
+
+---
+
+# 12. Profissional autenticado
 
 Mesma ideia:
 
@@ -181,130 +349,242 @@ UsuarioTenant.pessoa
 ProfissionalSaude.pessoa
 ```
 
-Endpoints `/me/agenda` resolvem o profissional atual.
+Endpoints como:
 
-## Senhas
+```text
+/me/agenda
+/me/pacientes/aguardando
+/me/resumo-diario
+```
 
-Usar encoder forte fornecido pelo Spring Security.
+resolvem o profissional atual pelo contexto autenticado.
+
+---
+
+# 13. Senhas
+
+Usar encoder forte fornecido/configurado pelo Spring Security.
 
 Nunca:
 
-- plaintext;
-- SHA simples;
-- senha em log.
+- armazenar senha em plaintext;
+- usar SHA simples como armazenamento de senha;
+- retornar hash;
+- registrar senha em log.
 
-## Refresh token
+---
+
+# 14. Refresh token
 
 MVP prático:
 
-- access token curto;
-- refresh token persistido e revogável;
-- logout revoga refresh token.
+```text
+access token curto
++
+refresh token persistido e revogável
+```
 
-Não precisa começar com arquitetura complexa de sessões distribuídas.
+Fluxo:
 
-## Auditoria
+- refresh associado ao contexto autorizado;
+- armazenar hash quando possível;
+- logout revoga refresh token;
+- rotação/hardening entra na ETAPA 9.
 
-Registrar explicitamente eventos críticos.
+Não começar com arquitetura distribuída de sessão sem necessidade real.
 
-`AuditService.record(...)` chamado nos Services relevantes.
+---
 
-Evitar AOP genérico na primeira versão porque dificulta enxergar o que está sendo auditado.
+# 15. Autorização de recursos clínicos
 
-## Acesso ao prontuário
+Toda operação sensível deve validar, conforme o caso:
+
+1. tenant;
+2. perfil;
+3. ownership/vínculo do usuário;
+4. acesso à unidade;
+5. vínculo profissional-paciente/atendimento quando exigido pela regra;
+6. estado do recurso.
+
+A autorização não deve existir apenas no Controller.
+
+Regras de domínio críticas permanecem no Service.
+
+---
+
+# 16. Acesso ao prontuário
 
 Toda leitura de prontuário deve verificar:
 
 1. tenant;
 2. perfil;
 3. unidade/regra aplicável;
-4. vínculo necessário.
+4. vínculo necessário;
+5. auditoria quando a ação for classificada como crítica.
 
-E gerar audit log.
+Cross-tenant nunca deve revelar a existência do prontuário.
 
-## Logs
+---
+
+# 17. Auditoria
+
+Registrar explicitamente eventos críticos.
+
+Padrão inicial:
+
+```text
+AuditService.record(...)
+```
+
+chamado pelos Services relevantes.
+
+Evitar AOP genérico na primeira versão se ele esconder quais operações realmente precisam ser auditadas.
+
+---
+
+# 18. Logs e correlation ID
+
+Toda request deve aceitar ou gerar:
+
+```http
+X-Correlation-Id
+```
+
+O correlation ID acompanha logs e erros.
 
 Não registrar conteúdo de:
 
 - evolução clínica;
 - prescrição completa;
-- CPF desnecessariamente;
-- JWT;
+- prontuário completo;
+- CPF sem necessidade;
+- JWT completo;
+- refresh token;
 - senha;
-- anexos.
+- anexos/mídias clínicas.
 
-## Headers e produção
+---
 
-Planejar:
+# 19. Segurança de produção
+
+Planejar/validar nas etapas corretas:
 
 - HTTPS;
 - CORS restrito;
 - headers de segurança;
-- rate limit em auth;
-- secrets fora do repositório.
+- rate limit de autenticação;
+- secrets fora do repositório;
+- storage privado;
+- limites/MIME de upload;
+- backups e restore;
+- observabilidade mínima.
 
-## RLS
-
-PostgreSQL Row Level Security é uma camada futura útil, mas não deve substituir queries tenant-aware.
-
-Adicionar somente depois que o Core estiver estável e os testes cross-tenant estiverem completos.
-
-## Checklist mínimo antes de produção
-
-- [ ] nenhum endpoint sem filtro tenant;
-- [ ] nenhum `findById(id)` direto em entidade tenant-scoped;
-- [ ] testes cross-tenant;
-- [ ] refresh revogável;
-- [ ] logs revisados;
-- [ ] storage privado;
-- [ ] backups;
-- [ ] HTTPS;
-- [ ] validação de LGPD/políticas de retenção com responsável adequado antes de uso real.
-
+Detalhes: `22_CONCORRENCIA_IDEMPOTENCIA_CLOCK_OPERACAO.md`.
 
 ---
 
-## Ordem prática de implementação
+# 20. PostgreSQL RLS
 
-Segurança será construída em duas fases:
+Row Level Security pode ser uma defesa adicional futura.
 
-### ETAPA 2
+Ela **não substitui**:
 
-Implementar o necessário para operar com segurança:
+```text
+queries tenant-aware
++
+autorização
++
+testes cross-tenant
+```
 
+Não adicionar RLS durante o Core H2.
+
+Avaliar somente depois que a modelagem e os testes de isolamento estiverem estáveis no PostgreSQL.
+
+---
+
+# 21. Ordem prática de implementação
+
+## ETAPA 2
+
+Implementar o necessário para operar com isolamento:
+
+- `Pessoa`;
+- `Usuario`;
+- `UsuarioTenant`;
+- `UsuarioUnidade`;
 - autenticação;
 - JWT;
-- TenantContext;
-- vínculo usuário-tenant;
+- refresh token;
+- `TenantContext`;
 - acesso por unidade;
 - testes cross-tenant.
 
-### ETAPA 9
+## ETAPA 9
 
 Hardening:
 
-- auditoria completa crítica;
+- auditoria crítica;
+- matriz de autorização;
 - rate limiting;
-- revisão de headers/CORS;
-- refresh rotation;
+- headers/CORS;
+- refresh rotation/revogação;
 - revisão de logs;
 - storage privado;
 - bateria final de isolamento.
 
-Isso evita bloquear os CRUDs iniciais com infraestrutura avançada, sem adiar o isolamento de tenant.
-
+Isso evita antecipar infraestrutura avançada sem adiar a segurança fundamental do tenant.
 
 ---
 
-## Desenvolvimento em H2 e revalidação
+# 22. Desenvolvimento em H2 e revalidação PostgreSQL
 
 O isolamento multi-tenant deve existir desde o H2.
 
-PostgreSQL não será usado como desculpa para adiar:
+PostgreSQL não é motivo para adiar:
 
-- `tenantId`;
+- tenant context;
+- `publicId`;
 - queries tenant-scoped;
 - validação de relacionamentos;
+- autorização;
 - testes cross-tenant.
 
-Na ETAPA 11, a bateria será repetida no PostgreSQL/Testcontainers.
+Na ETAPA 11, a bateria crítica será repetida em PostgreSQL/Testcontainers.
+
+---
+
+# 23. Checklist mínimo antes de produção
+
+- [ ] nenhum endpoint tenant-scoped aceita `tenantId Long` como seleção livre;
+- [ ] nenhum recurso público usa PK `Long` em URL/DTO;
+- [ ] JWT tenant-scoped usa identificadores públicos como contrato;
+- [ ] nenhum Service público busca entidade tenant-scoped diretamente por `findById(idDoCliente)`;
+- [ ] testes cross-tenant de leitura e escrita;
+- [ ] refresh revogável;
+- [ ] matriz de autorização testada;
+- [ ] logs revisados;
+- [ ] storage privado;
+- [ ] backups e restore testado;
+- [ ] HTTPS;
+- [ ] política de retenção/LGPD avaliada com responsável adequado antes de uso real.
+
+---
+
+# Regra final
+
+```text
+publicId
+→ identifica externamente
+
+tenant context
+→ determina organização ativa
+
+autorização
+→ determina o que o usuário pode fazer
+
+IDs Long
+→ permanecem internos ao backend/banco
+```
+
+Essas responsabilidades são complementares e não substituem umas às outras.
