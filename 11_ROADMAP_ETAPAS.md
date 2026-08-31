@@ -1,16 +1,31 @@
 # 11 — ROADMAP DE DESENVOLVIMENTO — AkosMed
 
-> Roadmap executável.  
-> Trabalhar uma subetapa por vez.  
-> Só marcar `[x]` após teste executado.
+> Roadmap executável oficial.  
+> Trabalhar **uma subetapa por vez**.  
+> Só marcar `[x]` após implementação e teste executado.  
+> Estado corrente e próxima tarefa: `CONTINUIDADE.md`.
 
 ---
 
-# PADRÃO FIXO DE SUBETAPA
+# 0. COMO USAR ESTE ROADMAP
+
+Antes de iniciar uma subetapa:
 
 ```text
-1. regra
-2. Entity/Enum
+CONTINUIDADE.md
+↓
+00_DOSSIE_PROJETO_AKOSMED.md
+↓
+subetapa deste roadmap
+↓
+documentos técnicos relacionados
+```
+
+Padrão fixo:
+
+```text
+1. confirmar regra
+2. Entity/Enum quando aplicável
 3. DTOs
 4. Repository
 5. Service
@@ -18,12 +33,70 @@
 7. validações/exceptions
 8. testes automatizados
 9. execução local
-10. revisão de qualidade
-11. CONTINUIDADE
+10. checklist 19
+11. atualizar CONTINUIDADE
 12. commit
 ```
 
-Swagger e Postman entram somente no fechamento.
+Não criar todas as Entities antes das camadas restantes.
+
+Não desenvolver vários CRUDs em paralelo sem concluir a subetapa aberta.
+
+---
+
+# 1. GUARDRAILS QUE VALEM EM TODAS AS ETAPAS
+
+## Identificação
+
+Toda Entity persistida:
+
+```text
+Long id       → somente interno
+UUID publicId → API/DTO/URL/integrações
+```
+
+## Multi-tenancy
+
+```text
+Shared Database + Shared Schema + tenant_id
+```
+
+Tenant vem do contexto autenticado. Nunca confiar em `tenantId` livre do request.
+
+## API
+
+- Entity não é contrato HTTP;
+- Controller recebe/retorna DTO;
+- relacionamento externo usa `...PublicId`;
+- listas grandes são paginadas;
+- ações de domínio têm endpoints explícitos;
+- erros têm `code` estável + `correlationId`.
+
+## JPA
+
+- LAZY por padrão;
+- sem `ManyToMany` no Core;
+- sem `CascadeType.ALL` por conveniência;
+- sem hard delete de histórico clínico.
+
+## Consistência
+
+- `Clock` em regras temporais;
+- `@Version` seletivo quando houver lost update;
+- idempotência apenas quando a operação realmente precisar;
+- concorrência de agendamento protegida dentro da transação.
+
+Referências transversais:
+
+```text
+15_PADROES_ENTIDADES_DTOS_REPOSITORIES.md
+16_RELACIONAMENTOS_JPA_CASCADE_FETCH.md
+17_PADROES_HTTP_ERROS_PAGINACAO.md
+18_MAPA_METODOS_SERVICES.md
+19_CHECKLIST_REVISAO_QUALIDADE.md
+21_PUBLIC_ID_E_CONCORRENCIA.md
+22_CONCORRENCIA_IDEMPOTENCIA_CLOCK_OPERACAO.md
+```
 
 ---
 
@@ -32,13 +105,24 @@ Swagger e Postman entram somente no fechamento.
 ## 0.1 Projeto base
 
 - [x] criar repositório `gbsalermo/AkosMed-BackEnd`;
-- [ ] Spring Boot Maven;
+- [ ] gerar Spring Boot Maven;
 - [ ] Java 21;
 - [ ] package `br.com.akosmed`;
-- [ ] dependências: Web, JPA, Validation, H2, Test;
+- [ ] dependências iniciais: Web, Data JPA, Validation, H2, Test;
 - [ ] executar `mvn test`;
 - [ ] iniciar aplicação;
-- [ ] commit inicial.
+- [ ] atualizar `CONTINUIDADE.md`;
+- [ ] commit.
+
+### Não adicionar em 0.1
+
+```text
+PostgreSQL Driver
+Flyway
+Spring Security/JWT
+Springdoc/Swagger
+mensageria
+```
 
 ### Aceite
 
@@ -47,7 +131,7 @@ BUILD SUCCESS
 Aplicação inicia
 Sem PostgreSQL
 Sem Swagger
-Sem entidades clínicas
+Sem entidades clínicas antecipadas
 ```
 
 ---
@@ -64,37 +148,44 @@ application-test.yml
 
 ### dev
 
-H2 local para desenvolvimento.
+```text
+H2 local
+DDL controlado para desenvolvimento
+console H2 opcional e apenas dev
+```
 
 ### test
 
-H2 em memória.
+```text
+H2 em memória
+ddl-auto=create-drop ou estratégia equivalente de teste
+```
 
-- [ ] console H2 opcional apenas em dev;
-- [ ] `ddl-auto=update` dev;
-- [ ] `ddl-auto=create-drop` test;
-- [ ] SQL logging controlado.
+- [ ] SQL logging controlado;
+- [ ] nenhuma credencial real versionada;
+- [ ] aplicação/testes usam profile correto.
 
 ---
 
 ## 0.3 Estrutura de packages
 
-Criar somente a estrutura necessária:
+Criar somente o necessário, seguindo:
 
 ```text
-shared
-tenant
-identity
-professional
-patient
-scheduling
-clinical
-prescription
-notification
-audit
+br.com.akosmed
+├── shared
+├── tenant
+├── identity
+├── professional
+├── patient
+├── scheduling
+├── clinical
+├── prescription
+├── notification
+└── audit
 ```
 
-Não criar classes vazias só para preencher estrutura.
+Não criar dezenas de classes vazias para preencher estrutura.
 
 ---
 
@@ -106,39 +197,39 @@ Criar:
 - [ ] `FieldErrorDTO`;
 - [ ] `GlobalExceptionHandler`;
 - [ ] `ResourceNotFoundException`;
-- [ ] `BusinessException`.
+- [ ] `BusinessRuleException`/`ConflictException` conforme padronização.
 
 Testar:
 
-- [ ] validação 400;
-- [ ] recurso inexistente 404;
-- [ ] conflito/regra 409.
+- [ ] 400 validação;
+- [ ] 404 recurso inexistente;
+- [ ] 409 conflito/regra;
+- [ ] `correlationId` no erro.
 
 ---
 
 ## 0.5 Clock + Correlation ID
 
-- [ ] criar bean `Clock`;
-- [ ] Services temporais não usam `now()` diretamente;
-- [ ] criar `CorrelationIdFilter`;
+- [ ] bean `Clock` centralizado;
+- [ ] regra temporal preparada para injeção de Clock;
+- [ ] `CorrelationIdFilter`;
 - [ ] aceitar ou gerar `X-Correlation-Id`;
-- [ ] devolver correlationId em `ApiErrorDTO`.
+- [ ] MDC/log quando configurado;
+- [ ] devolver o mesmo ID em `ApiErrorDTO`.
 
 ---
 
 ## 0.6 Smoke tests
 
 - [ ] `contextLoads`;
-- [ ] teste de controller simples;
+- [ ] teste simples de Controller/erro;
 - [ ] teste do correlationId;
-- [ ] teste com Clock fixo;
-- [ ] `mvn test`.
-
-Referência: `22_CONCORRENCIA_IDEMPOTENCIA_CLOCK_OPERACAO.md`.
+- [ ] teste com `Clock.fixed`;
+- [ ] `mvn test` verde.
 
 ### ETAPA 0 concluída quando
 
-Aplicação base estiver estável com H2.
+A base Spring Boot estiver estável em H2 e preparada para iniciar o primeiro CRUD sem infraestrutura futura antecipada.
 
 ---
 
@@ -146,14 +237,14 @@ Aplicação base estiver estável com H2.
 
 ## 1.1 Tenant
 
-Campos:
+Campos principais:
 
 ```text
 id
 publicId
 nome
 nomeFantasia
-slug
+a slug
 documento
 status
 timezone
@@ -161,14 +252,9 @@ createdAt
 updatedAt
 ```
 
-### Identificação pública
+> Corrigir o nome de campo real para `slug`; a linha acima representa o conjunto conceitual, não uma assinatura Java.
 
-- [ ] `id Long` interno;
-- [ ] `publicId UUID` imutável;
-- [ ] Controller usa UUID;
-- [ ] ResponseDTO não expõe `id`.
-
-### Métodos esperados
+Métodos esperados:
 
 ```text
 criar
@@ -177,23 +263,28 @@ listar
 atualizar
 ativar
 suspender
+buscarPorSlug
 ```
 
-### Regras
+Regras:
 
-- slug obrigatório e único;
-- sem hard delete;
-- timezone obrigatório;
-- status controlado por ação.
+- [ ] `id Long` interno;
+- [ ] `publicId UUID` imutável;
+- [ ] API não expõe `id`;
+- [ ] slug obrigatório/único global;
+- [ ] timezone obrigatório;
+- [ ] sem hard delete;
+- [ ] status alterado por ação;
+- [ ] `@Version` avaliado.
 
-### Testes
+Testes:
 
-- criar;
-- duplicidade de slug;
-- buscar;
-- atualizar;
-- suspender;
-- ativar.
+- [ ] criar;
+- [ ] publicId gerado/imutável;
+- [ ] duplicidade de slug;
+- [ ] buscar por UUID;
+- [ ] atualizar;
+- [ ] suspender/ativar.
 
 ---
 
@@ -211,16 +302,20 @@ telefone
 email
 endereco
 ativo
+createdAt
+updatedAt
 ```
 
-### Regras
+Regras:
 
-- código único dentro do tenant;
-- unidade sempre possui tenant;
-- tenant suspenso não recebe nova unidade;
-- sem hard delete.
+- [ ] código único dentro do Tenant;
+- [ ] Unidade sempre possui Tenant;
+- [ ] Tenant suspenso não recebe nova Unidade;
+- [ ] sem hard delete;
+- [ ] publicId externo;
+- [ ] `@Version` avaliado.
 
-### Repository mínimo
+Repository mínimo:
 
 ```text
 findByPublicIdAndTenantId
@@ -228,20 +323,21 @@ findAllByTenantId
 existsByCodigoAndTenantId
 ```
 
-### Testes críticos
+Testes críticos:
 
-- mesmo código em tenants diferentes funciona;
-- mesmo código no mesmo tenant falha;
-- busca cross-tenant não retorna.
+- [ ] mesmo código em Tenants diferentes funciona;
+- [ ] mesmo código no mesmo Tenant falha;
+- [ ] UUID de outro Tenant não retorna;
+- [ ] Response não expõe Long id.
 
 ---
 
-## 1.3 Revisão Etapa 1
+## 1.3 Revisão da Etapa 1
 
-Usar:
-
-- `16_RELACIONAMENTOS_JPA_CASCADE_FETCH.md`;
-- `19_CHECKLIST_REVISAO_QUALIDADE.md`.
+- [ ] `19_CHECKLIST_REVISAO_QUALIDADE.md` executado;
+- [ ] `mvn test` verde;
+- [ ] `CONTINUIDADE.md` atualizado;
+- [ ] commit/revisão antes de avançar.
 
 ---
 
@@ -253,6 +349,10 @@ Adicionar agora:
 Spring Security
 biblioteca JWT escolhida
 ```
+
+Não adicionar autenticação antes desta etapa apenas por conveniência.
+
+---
 
 ## 2.1 Pessoa
 
@@ -270,19 +370,23 @@ cpf
 dataNascimento
 telefone
 emailContato
+createdAt
+updatedAt
 ```
 
-### Cuidados
+Regras:
 
-- CPF pode ser nullable;
-- se informado, único por tenant;
-- não usar e-mail de contato como credencial.
+- [ ] CPF pode ser nullable;
+- [ ] se informado, único por Tenant;
+- [ ] e-mail de contato não é automaticamente credencial;
+- [ ] publicId externo;
+- [ ] `@Version` avaliado.
 
 ---
 
 ## 2.2 Usuario
 
-Global.
+Credencial global.
 
 Campos:
 
@@ -294,13 +398,17 @@ passwordHash
 status
 superAdmin
 ultimoLogin
+createdAt
+updatedAt
 ```
 
-### Cuidados
+Regras:
 
-- email de login único global;
-- nunca retornar hash;
-- password nunca entra em ResponseDTO.
+- [ ] email de login único global;
+- [ ] senha com encoder forte;
+- [ ] hash nunca retorna;
+- [ ] publicId no contrato externo;
+- [ ] sem senha/token em logs.
 
 ---
 
@@ -326,6 +434,7 @@ pessoa
 perfilTenant
 acessoTodasUnidades
 ativo
+createdAt
 ```
 
 Constraint:
@@ -334,11 +443,13 @@ Constraint:
 unique(usuario_id, tenant_id)
 ```
 
+Service valida consistência entre Tenant/Pessoa/Usuário.
+
 ---
 
 ## 2.4 UsuarioUnidade
 
-Usar somente se:
+Usar quando:
 
 ```text
 acessoTodasUnidades = false
@@ -350,7 +461,9 @@ Constraint:
 unique(usuario_tenant_id, unidade_id)
 ```
 
-Service deve garantir que unidade e UsuarioTenant pertencem ao mesmo tenant.
+- [ ] publicId conforme convenção global;
+- [ ] mesmo Tenant validado;
+- [ ] acesso por Unidade testado.
 
 ---
 
@@ -375,48 +488,75 @@ Tenant por slug
 ↓
 UsuarioTenant ativo
 ↓
-senha
+credencial
 ↓
-token com tenantPublicId + usuarioPublicId + usuarioTenantPublicId + perfil
+token
 ```
+
+Claims preferenciais:
+
+```text
+usuarioPublicId
+tenantPublicId
+usuarioTenantPublicId
+perfilTenant
+superAdmin=false
+```
+
+Não usar IDs Long sequenciais como contrato do JWT.
 
 ---
 
-## 2.6 Refresh token
+## 2.6 RefreshToken
 
-Entidade:
+Campos conceituais:
 
 ```text
-RefreshToken
 id
 publicId
-usuarioTenant
+usuario
+usuarioTenant nullable
 tokenHash
-expiraEm
+expiresAt
 revogadoEm
+createdAt
 ```
 
-Nunca guardar refresh token puro se puder guardar hash.
+Regras:
+
+- [ ] guardar hash quando possível;
+- [ ] revogação no logout;
+- [ ] não logar token puro;
+- [ ] fluxo global de superAdmin só se necessário.
 
 ---
 
 ## 2.7 TenantContext
 
-Extrair do token.
+Extrair/resolver contexto pelo token.
 
-O Controller não recebe `tenantId`.
+O Controller não recebe `tenantId` para escolher o Tenant.
+
+O servidor pode manter `Long tenantId` internamente após resolver `tenantPublicId`.
 
 ---
 
-## 2.8 Testes cross-tenant
+## 2.8 Testes cross-tenant e autorização básica
 
 Criar Tenant A/B e usuários A/B.
 
-Testar leitura e escrita cruzadas.
+Testar:
+
+- [ ] leitura cruzada;
+- [ ] escrita cruzada;
+- [ ] relacionamento usando UUID de outro Tenant;
+- [ ] perfil negado/permitido;
+- [ ] acesso por Unidade;
+- [ ] refresh revogado.
 
 ### ETAPA 2 concluída quando
 
-Isolamento estiver comprovado.
+Isolamento/autenticação estiverem comprovados e a API não depender de PK Long externa.
 
 ---
 
@@ -438,8 +578,9 @@ ativo
 
 Regras:
 
-- código único por tenant;
-- inativação em vez de delete.
+- código único por Tenant;
+- inativação em vez de delete;
+- publicId externo.
 
 ---
 
@@ -462,8 +603,8 @@ ativo
 Regras:
 
 - duração > 0;
-- dinheiro com BigDecimal;
-- código único por tenant.
+- dinheiro com `BigDecimal`;
+- código único por Tenant.
 
 ---
 
@@ -485,8 +626,9 @@ ativo
 
 Regras:
 
-- Pessoa deve pertencer ao mesmo tenant;
-- não duplicar registro profissional dentro do tenant quando informado.
+- Pessoa no mesmo Tenant;
+- não duplicar registro profissional quando os dados necessários existirem;
+- publicId externo.
 
 ---
 
@@ -512,7 +654,7 @@ Não usar `@ManyToMany`.
 
 Entidade de vínculo.
 
-Profissional só pode atender em unidade vinculada.
+Profissional só pode atender/agendar em Unidade vinculada e ativa.
 
 ---
 
@@ -526,6 +668,14 @@ Campos extras:
 duracaoMinutosOverride
 valorOverride
 ativo
+```
+
+Duração efetiva:
+
+```text
+override
+senão
+duração padrão do Procedimento
 ```
 
 ---
@@ -543,18 +693,20 @@ numeroProntuario
 status
 observacaoAdministrativa
 createdAt
+updatedAt
 ```
 
 Regras:
 
-- Pessoa mesmo tenant;
-- número prontuário único por tenant;
-- sem PatientUnit no MVP;
-- inativar em vez de apagar.
+- Pessoa mesmo Tenant;
+- número de prontuário único por Tenant;
+- sem `PacienteUnidade` no MVP;
+- inativar em vez de apagar;
+- publicId externo.
 
 ### ETAPA 3 concluída quando
 
-Cadastros básicos estiverem consistentes e isolados.
+Cadastros clínicos básicos estiverem consistentes, paginados quando necessário e isolados por Tenant.
 
 ---
 
@@ -580,10 +732,11 @@ ativo
 
 Regras:
 
-- profissional vinculado à unidade;
+- profissional vinculado à Unidade;
 - início < fim;
-- não criar janelas inválidas;
-- unidade mesmo tenant.
+- mesmo Tenant;
+- sem slots persistidos;
+- `@Version` avaliado.
 
 ---
 
@@ -602,24 +755,26 @@ fim
 tipo
 motivo
 ativo
+criadoPorUsuario
+createdAt
 ```
 
-No MVP, unidade obrigatória.
+No MVP, Unidade é obrigatória.
 
-Para bloquear todas as unidades, criar um bloqueio por unidade.
+Para bloquear todas as Unidades, criar um bloqueio por Unidade.
 
 ---
 
 ## 4.3 AvailabilityService
 
-Método principal:
+Método principal conceitual:
 
 ```text
 buscarHorariosDisponiveis(
-  profissionalPublicId,
-  unidadePublicId,
-  procedimentoPublicId,
-  data
+    profissionalPublicId,
+    unidadePublicId,
+    procedimentoPublicId,
+    data
 )
 ```
 
@@ -627,12 +782,22 @@ Considerar:
 
 - disponibilidade;
 - procedimento;
-- override profissional-procedimento;
+- override;
 - bloqueios;
-- agendamentos ativos;
-- duração.
+- agendamentos que ocupam agenda;
+- duração;
+- timezone do Tenant.
 
 Não persistir slots.
+
+### Testes
+
+- sem disponibilidade;
+- janelas separadas;
+- bloqueio parcial/total;
+- duração override;
+- intervalo adjacente;
+- cross-tenant.
 
 ---
 
@@ -660,20 +825,20 @@ createdAt
 updatedAt
 ```
 
-### Criar
+Service de criação deve:
 
-Service deve:
-
-1. resolver tenant;
-2. carregar paciente tenant-scoped;
-3. carregar profissional tenant-scoped;
-4. validar profissional-unidade;
+1. resolver Tenant;
+2. carregar paciente por `publicId + Tenant`;
+3. adquirir lock no profissional dentro da transação;
+4. validar vínculo profissional-Unidade;
 5. carregar procedimento;
 6. determinar duração;
 7. validar disponibilidade;
-8. verificar conflito;
-9. salvar;
-10. criar EventoAgendamento.
+8. validar bloqueios;
+9. validar overlap;
+10. salvar;
+11. registrar `EventoAgendamento`;
+12. criar notificação quando a regra exigir.
 
 ---
 
@@ -689,7 +854,7 @@ listarPorPaciente
 listarPorUnidadeEData
 ```
 
-Todas paginadas quando puder crescer.
+Paginar quando o volume puder crescer.
 
 ---
 
@@ -703,54 +868,102 @@ checkIn
 marcarFalta
 ```
 
-Cada uma valida transição.
+Cada ação valida transição.
+
+Não usar `PUT /agendamentos/{publicId}` genérico para alterar livremente status/horário.
 
 ---
 
 ## 5.4 EventoAgendamento
 
-Não editar histórico.
+Histórico append-only.
 
-Salvar eventos de mudança.
+Registrar:
+
+- criação;
+- mudança de status;
+- reagendamento;
+- motivo/usuário quando aplicável.
+
+Não editar eventos existentes.
 
 ---
 
-## 5.5 Conflito e concorrência
+## 5.5 Overlap e concorrência
 
-### H2
+Intervalo:
 
-- [ ] testar overlap funcional;
-- [ ] testar intervalos adjacentes;
-- [ ] definir status que bloqueiam slot;
-- [ ] criação e reagendamento reutilizam a mesma validação.
+```text
+[inicio, fim)
+```
 
-### PostgreSQL
+Overlap:
 
-A proteção concorrente definitiva será validada na ETAPA 11.
+```text
+existing.inicio < novoFim
+AND
+existing.fim > novoInicio
+```
 
-Estratégia planejada:
+Status iniciais que ocupam agenda:
+
+```text
+SOLICITADO
+CONFIRMADO
+CHECK_IN
+EM_ATENDIMENTO
+```
+
+Cancelados/FALTOU não ocupam.
+
+Centralizar essa regra.
+
+### Fluxo concorrente
 
 ```text
 @Transactional
-PESSIMISTIC_WRITE no profissional
-revalidar disponibilidade
-verificar overlap
-salvar
+→ PESSIMISTIC_WRITE no profissional
+→ revalidar tudo
+→ consultar overlap
+→ salvar
 ```
 
-Dois pacientes no mesmo horário:
+Resultado obrigatório:
 
 ```text
-1 sucesso
-1 conflito
+2 pacientes + mesmo profissional + mesmo slot
+→ 1 sucesso
+→ 1 HTTP 409 AGENDAMENTO_CONFLITO
 ```
 
-Não avançar para fechamento enquanto esse teste real não passar.
+Criação e reagendamento reutilizam a mesma proteção.
 
-### Idempotência
+---
 
-- [ ] avaliar `Idempotency-Key` no POST de agendamento;
-- [ ] retries da mesma operação não podem criar efeitos duplicados.
+## 5.6 Idempotência de criação
+
+Avaliar `Idempotency-Key` no `POST /agendamentos`.
+
+Se adotado:
+
+- mesma key + mesmo payload não duplica efeito;
+- mesma key + payload diferente → 409.
+
+Não construir infraestrutura genérica se a decisão da subetapa concluir que ainda não é necessária.
+
+---
+
+## 5.7 Testes H2
+
+- [ ] overlap funcional;
+- [ ] adjacência permitida;
+- [ ] status que bloqueiam/liberam;
+- [ ] reagendamento conflitante;
+- [ ] cross-tenant;
+- [ ] teste concorrente básico;
+- [ ] lock JPA configurado.
+
+A garantia definitiva é revalidada na ETAPA 11 com PostgreSQL/Testcontainers.
 
 ---
 
@@ -783,16 +996,20 @@ unidade
 profissional
 agendamento nullable
 inicio
-fim
+fim nullable
 status
 tipoAtendimento
+createdAt
+updatedAt
 ```
 
 Regras:
 
-- profissional e prontuário mesmo tenant;
-- agendamento, se informado, deve ser compatível;
-- atendimento pode ser avulso.
+- profissional/Prontuário no mesmo Tenant;
+- Agendamento, se informado, é compatível;
+- Atendimento pode ser avulso;
+- não duplicar `paciente_id`;
+- considerar `agendamento_id UNIQUE` quando informado.
 
 ---
 
@@ -812,13 +1029,17 @@ motivoRetificacao nullable
 createdAt
 ```
 
-Regra:
+Regras:
 
-registro original não é sobrescrito.
+- append-only;
+- original não é sobrescrito;
+- retificação cria novo registro;
+- sem delete destrutivo;
+- autorização/auditoria conforme regra.
 
 ---
 
-# ETAPA 7 — PRESCRIÇÃO E ANEXOS
+# ETAPA 7 — PRESCRIÇÃO, DOCUMENTO E ANEXOS
 
 ## 7.1 Prescricao
 
@@ -834,18 +1055,20 @@ Métodos:
 
 ```text
 criarRascunho
-buscar
+buscarPorPublicId
 listarPorPaciente
 listarPorAtendimento
 emitir
 cancelar
 ```
 
+Paciente é derivado do Atendimento/Prontuário.
+
 ---
 
 ## 7.2 ItemPrescricao
 
-Manipulável apenas enquanto RASCUNHO.
+Manipulável apenas enquanto Prescrição estiver em RASCUNHO.
 
 Métodos:
 
@@ -858,38 +1081,65 @@ removerItem
 Após EMITIDA:
 
 - não editar silenciosamente;
-- nova prescrição ou fluxo de cancelamento/substituição.
+- preservar histórico;
+- correção segue cancelamento/substituição conforme regra definida.
 
 ---
 
 ## 7.3 Gerador de receita
 
-No Core:
+No Core, gerar representação a partir de `Prescricao`.
 
-gerar representação a partir da Prescricao.
+Assinatura digital fica para etapa futura.
 
-Assinatura digital fica para futuro.
+Idempotência de emissão:
 
-### Idempotência de emissão
-
-- [ ] avaliar `Idempotency-Key` para emissão;
-- [ ] retry não pode emitir duas vezes.
+- [ ] avaliar `Idempotency-Key`;
+- [ ] retry não pode emitir efeito duplicado.
 
 ---
 
-## 7.4 AnexoClinico
+## 7.4 StorageService
 
-Banco guarda metadata.
-
-Arquivo via:
+Criar abstração pequena:
 
 ```text
-StorageService
+salvar
+abrir
+remover/inativar referência
 ```
 
-No H2/desenvolvimento:
+Desenvolvimento:
 
-filesystem local pode ser usado.
+```text
+filesystem local
+```
+
+Produção futura:
+
+```text
+S3/storage compatível
+```
+
+Não acoplar domínio diretamente a SDK específico.
+
+---
+
+## 7.5 AnexoClinico
+
+Banco guarda metadata e `storageKey` interno.
+
+Arquivo real fica no StorageService.
+
+Regras:
+
+- autorização antes de download;
+- storageKey não aparece no ResponseDTO;
+- sem BLOB grande no banco;
+- limites/MIME progressivamente definidos;
+- falhas não deixam persistência inconsistente.
+
+Essa infraestrutura será reutilizada depois por `OrientacaoPaciente`, mas **não implementar OrientacaoPaciente agora**.
 
 ---
 
@@ -897,74 +1147,104 @@ filesystem local pode ser usado.
 
 ## 8.1 Agenda diária
 
-Service monta visão do usuário autenticado.
+Criar Query Service para visão do usuário autenticado.
+
+Exemplos:
+
+```text
+buscarMinhaAgendaHoje
+buscarMinhaAgenda(data)
+```
 
 ---
 
 ## 8.2 Pacientes aguardando
 
-Baseado em status CHECK_IN.
+Baseado em status `CHECK_IN` e autorização do profissional/Unidade.
 
 ---
 
 ## 8.3 Pendências
 
-Começar simples, calculadas por consulta.
+Começar calculadas por consulta:
 
-Não criar motor de regras genérico.
+- atendimentos abertos;
+- prescrições em rascunho;
+- consultas aguardando confirmação;
+- pacientes em check-in.
+
+Não criar entidade/motor genérico de Pendência sem necessidade.
 
 ---
 
 ## 8.4 Notificacao
 
-Primeira versão in-app.
+Primeira versão:
 
-Sem WhatsApp/Telegram ainda.
+```text
+in-app
+```
+
+Sem WhatsApp/Telegram/push ainda.
+
+Endpoints `/me` resolvem o usuário autenticado.
 
 ---
 
-# ETAPA 9 — AUDITORIA E SEGURANÇA
+# ETAPA 9 — AUDITORIA E HARDENING DE SEGURANÇA
 
 ## 9.1 AuditLog
 
 Registrar ações críticas.
 
-Evitar relacionamento JPA pesado no AuditLog.
+Preferir IDs internos simples/metadata segura em vez de grafo JPA pesado.
 
-Guardar IDs simples.
+Não logar conteúdo clínico desnecessário.
 
 ---
 
-## 9.2 Hardening
+## 9.2 Segurança
 
-- refresh rotation;
-- revogação;
-- CORS;
-- logs;
-- secrets;
-- correlationId completo;
-- acesso por unidade;
-- revisão de endpoints.
+- [ ] refresh rotation/revogação;
+- [ ] CORS;
+- [ ] headers de segurança;
+- [ ] rate limit em auth;
+- [ ] revisão de logs;
+- [ ] secrets;
+- [ ] correlationId completo;
+- [ ] acesso por Unidade;
+- [ ] storage privado;
+- [ ] revisão de endpoints.
+
+---
 
 ## 9.3 Matriz de autorização
 
-- [ ] ADMIN_TENANT;
-- [ ] SECRETARIA;
-- [ ] PROFISSIONAL;
-- [ ] PACIENTE;
-- [ ] AUDITOR;
-- [ ] recurso × ação;
-- [ ] testes de acesso permitido/negado.
+Perfis:
 
-Referência: `22_CONCORRENCIA_IDEMPOTENCIA_CLOCK_OPERACAO.md`.
+```text
+ADMIN_TENANT
+SECRETARIA
+PROFISSIONAL
+PACIENTE
+AUDITOR
+```
+
+- [ ] recurso × perfil × ação definido;
+- [ ] testes de acesso permitido;
+- [ ] testes de acesso negado;
+- [ ] cross-tenant permanece 404 quando aplicável.
+
+---
 
 ## 9.4 Optimistic locking
 
 Revisar entidades mutáveis:
 
 - [ ] `@Version` onde lost update for relevante;
-- [ ] conflito convertido para `409 RESOURCE_VERSION_CONFLICT`;
-- [ ] testes com duas atualizações concorrentes.
+- [ ] duas atualizações concorrentes testadas;
+- [ ] conflito convertido em `409 RESOURCE_VERSION_CONFLICT`;
+- [ ] histórico append-only não recebe `@Version` por reflexo.
 
 ---
 
@@ -973,35 +1253,46 @@ Revisar entidades mutáveis:
 Antes de PostgreSQL:
 
 - [ ] todos os testes passam;
-- [ ] nenhuma regra depende de SQL específico;
+- [ ] `mvn test` verde;
+- [ ] nenhuma regra depende de SQL H2-specific sem necessidade;
 - [ ] relacionamentos revisados;
-- [ ] cascades revisados;
+- [ ] cascades/orphanRemoval revisados;
+- [ ] publicId revisado em toda API;
+- [ ] nenhum Long id exposto;
 - [ ] endpoints revisados;
 - [ ] paginação revisada;
-- [ ] exceptions revisadas;
-- [ ] tenant isolation revisado;
+- [ ] exceptions/correlationId revisados;
+- [ ] Tenant isolation revisado;
+- [ ] Clock revisado;
+- [ ] `@Version` revisado;
 - [ ] código morto removido;
 - [ ] TODO crítico resolvido.
 
-Executar fluxo ponta a ponta por teste:
+Fluxo automatizado mínimo:
 
 ```text
 Tenant
 → Unidade
-→ Usuário
+→ Usuário/Auth
 → Profissional
 → Paciente
 → Disponibilidade
 → Agendamento
+→ Confirmação
 → Check-in
 → Atendimento
 → Evolução
 → Prescrição
+→ Conclusão
 ```
+
+### Gate
+
+Não iniciar PostgreSQL se o domínio ainda estiver mudando por erros básicos do Core.
 
 ---
 
-# ETAPA 11 — POSTGRESQL + FLYWAY
+# ETAPA 11 — POSTGRESQL + FLYWAY + TESTCONTAINERS
 
 Agora adicionar:
 
@@ -1011,24 +1302,28 @@ Flyway
 Testcontainers PostgreSQL
 ```
 
+---
+
 ## 11.1 Revisão de modelagem
 
 Antes das migrations:
 
-- nomes de tabelas;
-- FKs;
-- índices;
-- uniques;
-- nullability;
-- BigDecimal;
-- timestamps;
-- tamanhos de varchar/text.
+- [ ] nomes de tabelas/colunas;
+- [ ] FKs;
+- [ ] `public_id UUID NOT NULL UNIQUE`;
+- [ ] índices;
+- [ ] uniques compostos;
+- [ ] nullability;
+- [ ] BigDecimal/NUMERIC;
+- [ ] timestamps/UTC;
+- [ ] varchar/TEXT;
+- [ ] constraints de status/integridade quando adequadas.
 
 ---
 
-## 11.2 Migrations
+## 11.2 Migrations Flyway
 
-Criar migrations a partir do modelo estabilizado.
+Criar migrations por blocos lógicos a partir do modelo estabilizado.
 
 Produção:
 
@@ -1036,18 +1331,24 @@ Produção:
 ddl-auto=validate
 ```
 
+Testar banco limpo executando todas as migrations sem alteração manual.
+
 ---
 
-## 11.3 Reexecutar testes no PostgreSQL
+## 11.3 Reexecutar testes em PostgreSQL
 
-Obrigatório revalidar:
+Obrigatório:
 
 - multi-tenant;
 - constraints;
+- publicId;
 - paginação;
-- consultas;
+- queries;
 - locks;
-- concorrência do agendamento.
+- concorrência;
+- transações;
+- timezone;
+- optimistic locking.
 
 ---
 
@@ -1055,15 +1356,35 @@ Obrigatório revalidar:
 
 Testcontainers/PostgreSQL:
 
-- [ ] disparar duas transações simultâneas para o mesmo profissional/período;
-- [ ] usar lock pessimista no profissional;
-- [ ] a segunda transação deve esperar/revalidar;
-- [ ] apenas uma pode persistir;
-- [ ] a outra deve resultar em `AGENDAMENTO_CONFLITO`;
-- [ ] repetir cenário de reagendamento;
-- [ ] avaliar/adicionar exclusion constraint PostgreSQL como defesa adicional.
+- [ ] disparar duas transações simultâneas;
+- [ ] mesmo profissional/período;
+- [ ] `PESSIMISTIC_WRITE` no profissional;
+- [ ] segunda transação espera e revalida;
+- [ ] exatamente uma persiste;
+- [ ] outra resulta em `AGENDAMENTO_CONFLITO`;
+- [ ] repetir reagendamento concorrente;
+- [ ] testar profissionais diferentes no mesmo horário;
+- [ ] testar slots adjacentes.
 
-A ETAPA 11 não termina se for possível persistir overlap por corrida concorrente.
+A ETAPA 11 não termina se corrida concorrente permitir overlap.
+
+---
+
+## 11.5 Exclusion constraint PostgreSQL
+
+Avaliar/adicionar como segunda barreira:
+
+```text
+Service validation
++
+PESSIMISTIC_WRITE
++
+PostgreSQL exclusion constraint
+```
+
+Usar `tstzrange(..., '[)')` e filtrar status que ocupam agenda conforme nomes/tipos reais da migration.
+
+Testar a constraint em Testcontainers.
 
 ---
 
@@ -1074,20 +1395,23 @@ Somente agora adicionar Springdoc.
 Documentar:
 
 - tags por módulo;
+- UUID publicId;
 - DTOs;
 - exemplos;
 - status HTTP;
-- erros;
+- códigos de erro;
+- correlationId;
 - JWT;
 - filtros;
 - paginação;
-- ações de domínio.
+- ações de domínio;
+- headers de idempotência onde existirem.
 
-Não documentar endpoint que ainda está instável.
+Não documentar endpoint instável como contrato final.
 
 ---
 
-# ETAPA 13 — POSTMAN
+# ETAPA 13 — POSTMAN + VALIDAÇÃO PONTA A PONTA
 
 Criar coleção oficial:
 
@@ -1110,7 +1434,7 @@ Criar coleção oficial:
 15 Auditoria
 ```
 
-Criar environment:
+Environment:
 
 ```text
 baseUrl
@@ -1119,7 +1443,17 @@ tenantSlug
 publicIds de teste
 ```
 
-Validar happy path + erros principais.
+Nunca depender de Long IDs copiados do banco.
+
+Validar:
+
+- happy paths;
+- auth;
+- publicId;
+- cross-tenant;
+- status inválidos;
+- conflitos;
+- fluxo E2E completo.
 
 ---
 
@@ -1128,67 +1462,476 @@ Validar happy path + erros principais.
 ## 14.1 Operação/produção
 
 - [ ] Actuator/health;
-- [ ] secrets fora do repositório;
-- [ ] limites de upload;
+- [ ] secrets fora do Git;
+- [ ] limites definitivos de upload;
+- [ ] MIME/extensões permitidas;
 - [ ] estratégia de backup;
-- [ ] teste de restore;
+- [ ] retenção/criptografia;
+- [ ] procedimento de restore;
+- [ ] teste real de restore;
 - [ ] logs/correlationId revisados;
-- [ ] observabilidade mínima.
+- [ ] observabilidade mínima;
+- [ ] HTTPS/configuração de produção documentada.
+
+Backup sem teste de restore não é considerado concluído.
+
+---
 
 ## 14.2 Fechamento técnico
 
 - [ ] testes H2;
-- [ ] testes PostgreSQL;
+- [ ] testes PostgreSQL/Testcontainers;
 - [ ] migrations;
+- [ ] concorrência real;
 - [ ] Swagger;
 - [ ] Postman;
 - [ ] README de execução;
 - [ ] revisão de segurança;
 - [ ] documentação atualizada;
-- [ ] release/tag.
+- [ ] `CONTINUIDADE.md` registra MVP fechado;
+- [ ] release/tag `Backend MVP 1.0`.
+
+### Gate pós-MVP
+
+Somente depois desse fechamento avançar para funcionalidades específicas de paciente/mobile já planejadas abaixo.
 
 ---
 
-# ETAPA 15 — API DO PACIENTE
+# ETAPA 15 — API DO PACIENTE + ORIENTAÇÕES/MATERIAIS TERAPÊUTICOS
 
-Criar endpoints `/me`.
+> **Pós-MVP.** O Core já deve estar fechado, PostgreSQL/Flyway/Swagger/Postman em operação.
 
-Sem permitir paciente escolher outro `pacientePublicId`.
+Objetivo: expor uma API `/me` segura para o paciente e adicionar o domínio `OrientacaoPaciente`, inicialmente motivado por vídeos de exercícios enviados por fisioterapeutas.
+
+Referência principal: `13_APPS_ASSISTENTES_E_PRESCRICOES.md`.
 
 ---
 
-# ETAPA 16 — AKOSMED PATIENT / KOTLIN
+## 15.1 API `/me` do paciente
 
-Projeto separado.
+Implementar/estabilizar:
+
+```http
+GET /api/v1/me/perfil
+GET /api/v1/me/consultas
+GET /api/v1/me/consultas/proximas
+GET /api/v1/me/prescricoes
+GET /api/v1/me/prescricoes/{publicId}
+GET /api/v1/me/notificacoes
+```
+
+Regra:
+
+```text
+UsuarioTenant.pessoa
+→ Paciente
+```
+
+O paciente não envia `pacientePublicId` para acessar os próprios dados.
+
+Testar:
+
+- paciente correto;
+- outro paciente não acessa;
+- cross-tenant;
+- perfil não-paciente;
+- paginação quando necessária.
+
+---
+
+## 15.2 Autoagendamento do paciente — se aprovado para esta entrega
+
+Endpoints planejados:
+
+```http
+GET  /api/v1/me/horarios-disponiveis
+POST /api/v1/me/agendamentos
+POST /api/v1/me/agendamentos/{publicId}/cancelar
+POST /api/v1/me/agendamentos/{publicId}/reagendar
+```
+
+Reutilizar **o mesmo** `AgendamentoService` e as mesmas proteções de concorrência do fluxo administrativo.
+
+Não criar uma segunda regra de agenda exclusiva para o app.
+
+Se o escopo comercial decidir adiar autoagendamento, registrar no `CONTINUIDADE.md` sem bloquear as orientações.
+
+---
+
+## 15.3 OrientacaoPaciente — domínio
+
+Criar Entity apenas agora.
+
+Campos planejados:
+
+```text
+id
+publicId
+tenant
+paciente
+profissional
+atendimento nullable
+titulo
+descricao
+tipo
+storageKey nullable
+urlExterna nullable
+mimeType nullable
+duracaoSegundos nullable
+visivelAPartirDe nullable
+expiraEm nullable
+ativo
+createdAt
+```
+
+Enum:
+
+```text
+VIDEO
+DOCUMENTO
+LINK
+TEXTO
+```
+
+Primeiro caso de uso:
+
+```text
+fisioterapeuta
+→ paciente
+→ vídeo demonstrando exercício correto
+→ instruções
+→ visualização no AkosMed Patient
+```
+
+Não criar `VideoFisioterapia` específico.
+
+---
+
+## 15.4 Regras de OrientacaoPaciente
+
+- [ ] `id Long` interno + `publicId UUID` externo;
+- [ ] paciente/profissional no mesmo Tenant;
+- [ ] Atendimento, se informado, compatível com paciente/profissional/Tenant;
+- [ ] profissional autorizado para enviar;
+- [ ] paciente não altera conteúdo enviado;
+- [ ] inativação/remoção lógica quando necessário;
+- [ ] criação/remoção auditada conforme matriz;
+- [ ] `Clock` para visibilidade/expiração;
+- [ ] `@Version` avaliado se houver edição administrativa real.
+
+---
+
+## 15.5 Storage de materiais
+
+Não armazenar binário de vídeo no PostgreSQL.
+
+Banco guarda metadata/referência.
+
+Reutilizar `StorageService`.
+
+Regras:
+
+- [ ] `storageKey` nunca sai no ResponseDTO;
+- [ ] autorização antes de gerar acesso;
+- [ ] URL temporária/assinada quando infraestrutura suportar;
+- [ ] tamanho máximo;
+- [ ] MIME/extensões permitidas;
+- [ ] não permitir executáveis;
+- [ ] nome original não vira chave física diretamente;
+- [ ] falhas de upload/persistência não deixam lixo/inconsistência.
+
+---
+
+## 15.6 Endpoints do profissional
+
+Planejados:
+
+```http
+POST   /api/v1/pacientes/{pacientePublicId}/orientacoes
+GET    /api/v1/pacientes/{pacientePublicId}/orientacoes
+DELETE /api/v1/pacientes/{pacientePublicId}/orientacoes/{orientacaoPublicId}
+```
+
+Se `DELETE` for usado, representar a semântica definida de inativação/remoção lógica sem destruir histórico necessário.
+
+---
+
+## 15.7 Endpoints do paciente
+
+```http
+GET /api/v1/me/orientacoes
+GET /api/v1/me/orientacoes/{orientacaoPublicId}
+```
+
+O backend resolve o Paciente do contexto autenticado.
+
+Nunca aceitar `pacientePublicId` do app nesse fluxo.
+
+---
+
+## 15.8 Testes de OrientacaoPaciente
+
+Obrigatórios:
+
+- [ ] profissional autorizado cria;
+- [ ] publicId gerado/imutável;
+- [ ] paciente só lista as próprias;
+- [ ] UUID de outro paciente → 404/negado sem vazamento;
+- [ ] cross-tenant;
+- [ ] Atendimento incompatível;
+- [ ] storageKey não exposto;
+- [ ] MIME/tamanho inválido;
+- [ ] expiração/visibilidade com `Clock.fixed`;
+- [ ] remoção lógica/auditoria;
+- [ ] acesso ao arquivo depende de autorização.
+
+---
+
+## 15.9 Atualizar documentação final
+
+Como PostgreSQL/Swagger/Postman já existem nessa fase:
+
+- [ ] migration Flyway de `OrientacaoPaciente`;
+- [ ] testes Testcontainers;
+- [ ] Swagger atualizado;
+- [ ] coleção Postman atualizada;
+- [ ] `CONTINUIDADE.md` atualizado.
+
+### ETAPA 15 concluída quando
+
+A API do paciente e o fluxo de orientações estiverem seguros/estáveis para serem consumidos pelo app Kotlin.
+
+---
+
+# ETAPA 16 — AKOSMED PATIENT / KOTLIN + ORIENTAÇÕES E VÍDEOS
+
+> Projeto mobile separado. O backend continua sendo a fonte das regras.
+
+Tecnologia planejada:
+
+```text
+Kotlin / Android
+```
+
+---
+
+## 16.1 Fundação do app
+
+- [ ] projeto separado;
+- [ ] configuração de ambientes/baseUrl;
+- [ ] cliente HTTP;
+- [ ] armazenamento seguro de token;
+- [ ] tratamento padronizado de erros por `code`;
+- [ ] sessão/logout/refresh;
+- [ ] não guardar dados clínicos desnecessários em cache/log.
+
+---
+
+## 16.2 MVP inicial do app
+
+- [ ] login;
+- [ ] próximas consultas;
+- [ ] detalhes da consulta;
+- [ ] prescrições;
+- [ ] notificações.
+
+Consumir `/api/v1/me/*`.
+
+O app não implementa regra de Tenant/agendamento/prescrição duplicada localmente.
+
+---
+
+## 16.3 Orientações do profissional
+
+Criar área:
+
+```text
+Orientações do profissional
+```
+
+Exibir:
+
+- profissional;
+- título;
+- instrução;
+- data;
+- tipo/material;
+- vínculo com Atendimento quando aplicável.
+
+---
+
+## 16.4 Vídeos
+
+Para `VIDEO`:
+
+- [ ] obter acesso autorizado pelo backend;
+- [ ] consumir URL temporária/assinada;
+- [ ] player adequado;
+- [ ] tratar expiração da URL;
+- [ ] não transformar URL privada em link público permanente;
+- [ ] mensagens de erro amigáveis sem esconder `code` para diagnóstico.
+
+Exemplo de uso:
+
+```text
+Exercício para mobilidade do ombro
+Enviado por: profissional responsável
+Orientação: instruções definidas pelo profissional
+[Assistir vídeo]
+```
+
+O paciente não edita o material.
+
+---
+
+## 16.5 Segunda fase do app
+
+Depois do fluxo inicial validado:
+
+- horários disponíveis;
+- autoagendamento;
+- cancelamento/reagendamento;
+- documentos;
+- solicitações administrativas.
+
+Não começar por chat em tempo real.
 
 ---
 
 # ETAPA 17 — AKOS ASSISTANT
 
-Consumir serviços/endpoints já existentes.
+Consumir Services/endpoints já existentes.
+
+Objetivo:
+
+- agenda;
+- próxima consulta;
+- pacientes aguardando;
+- cancelamentos;
+- atendimentos abertos;
+- pendências;
+- resumo diário;
+- alertas.
+
+Regra:
+
+```text
+bot/app/adapter não contém regra de negócio crítica
+```
+
+Fases possíveis:
+
+```text
+endpoints/resumos
+↓
+push/app profissional
+↓
+bot Telegram/WhatsApp se houver valor real
+```
+
+Não criar backend paralelo.
 
 ---
 
-# ETAPA 18 — ESPECIALIZAÇÕES
+# ETAPA 18 — ESPECIALIZAÇÕES CLÍNICAS
 
-Dental / Psychology / Vision.
+Entram somente com necessidade concreta.
+
+Possíveis módulos:
+
+```text
+Akos Dental
+Akos Psi
+Akos Vision
+```
+
+Regras:
+
+- reutilizar Paciente/Profissional/Atendimento/Prontuário;
+- especialização referencia `Atendimento` como raiz clínica;
+- não duplicar Core;
+- etapa própria por especialização;
+- requisitos/testes próprios.
 
 ---
 
-# ETAPA 19 — MÓDULOS ADICIONAIS
+# ETAPA 19 — MÓDULOS ADICIONAIS E INTEGRAÇÕES
 
-Financeiro, convênio, estoque, laboratório, TISS, RNDS etc.
+Somente com caso real definido.
+
+Possíveis:
+
+```text
+Financeiro clínico
+Convênios
+Estoque
+Laboratório
+TISS
+RNDS
+Assinatura digital
+WhatsApp/e-mail/SMS
+Gateway de pagamento
+Calendário externo
+SaaS billing
+```
+
+Cada módulo deve ter:
+
+1. necessidade concreta;
+2. escopo;
+3. modelagem;
+4. etapa própria;
+5. migrations;
+6. segurança;
+7. testes;
+8. Swagger/Postman atualizados.
+
+Não incluir no Core preventivamente.
 
 ---
 
 # REGRA DE RETOMADA
 
-1. abrir `CONTINUIDADE.md`;
-2. identificar a próxima subetapa;
-3. abrir os documentos técnicos correspondentes;
-4. implementar apenas essa subetapa;
-5. executar testes;
-6. passar checklist `19`;
-7. registrar resultado;
-8. commit;
-9. avançar.
+Sempre:
+
+```text
+1. abrir CONTINUIDADE.md
+2. confirmar estado no repositório
+3. abrir 00_DOSSIE_PROJETO_AKOSMED.md
+4. identificar a próxima subetapa neste arquivo
+5. abrir documentos técnicos correspondentes
+6. implementar somente essa subetapa
+7. executar testes
+8. passar checklist 19
+9. atualizar CONTINUIDADE
+10. commit
+11. avançar apenas depois da validação
+```
+
+---
+
+# REGRA DE STATUS
+
+Não marcar `[x]` por intenção, documentação ou código não executado.
+
+```text
+[x] = implementado + testado + revisado
+[ ] = ainda não comprovado
+```
+
+Se outra IA assumir o projeto, ela deve preservar essa semântica.
+
+---
+
+# ESTADO NA REVISÃO DOCUMENTAL DE 2026-08-31
+
+Na data desta revisão:
+
+```text
+ETAPA 0 aberta
+repositório/documentação existentes
+Spring Boot ainda não gerado
+próxima tarefa = 0.1 Projeto base
+```
+
+O estado futuro deve ser consultado em `CONTINUIDADE.md`, que é atualizado a cada subetapa.
