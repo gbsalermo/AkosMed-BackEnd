@@ -1,12 +1,13 @@
 # 16 — Relacionamentos JPA, Cascade e Fetch
 
-Este é um dos documentos mais importantes para evitar bugs de modelagem.
+> Referência obrigatória antes de implementar relações do AkosMed.  
+> Modelo canônico do MVP: `04_ENTIDADES_E_RELACIONAMENTOS.md`.
 
 ---
 
 # 1. Regra geral
 
-Preferir relacionamentos explícitos e controlados.
+Preferir relacionamentos explícitos, unidirecionais quando possível e controlados pelo Service.
 
 Não usar:
 
@@ -14,22 +15,54 @@ Não usar:
 @ManyToMany
 ```
 
-quando a relação possui:
+quando a relação possui ou pode possuir:
 
 - campos próprios;
 - status;
 - data;
-- configurações.
+- configuração;
+- regras de vínculo.
 
-Por isso o AkosMed usa entidades de vínculo.
+Por isso o AkosMed usa Entities de vínculo como:
+
+```text
+UsuarioUnidade
+ProfissionalEspecialidade
+ProfissionalUnidade
+ProfissionalProcedimento
+```
 
 ---
 
-# 2. Fetch
+# 2. Public ID não muda as FKs
+
+Toda Entity persistida usa:
+
+```text
+Long id       → PK/FK interna
+UUID publicId → contrato externo
+```
+
+Relacionamentos JPA continuam usando a Entity/FK numérica.
+
+Exemplo:
+
+```text
+Agendamento.profissional_id → BIGINT FK
+AgendamentoCreateDTO.profissionalPublicId → UUID
+```
+
+O Service resolve `publicId + Tenant`, obtém a Entity e só então monta o relacionamento.
+
+Não usar `publicId` como FK no MVP por padrão.
+
+---
+
+# 3. Fetch
 
 ## To-One
 
-Mesmo que JPA tenha defaults diferentes, no projeto preferir explicitamente:
+Preferir explicitamente:
 
 ```java
 @ManyToOne(fetch = FetchType.LAZY)
@@ -40,17 +73,22 @@ quando viável.
 
 ## Collections
 
-```java
-@OneToMany
-```
+`@OneToMany` já é LAZY por padrão.
 
-já são LAZY por padrão.
+Não trocar para EAGER para “resolver” `LazyInitializationException`.
 
-Não trocar para EAGER para “resolver erro”.
+Se uma resposta precisa de dados relacionados, resolver com:
+
+- transação adequada;
+- query específica;
+- fetch join/projection quando houver necessidade real;
+- mapper dentro da fronteira correta.
+
+Não serializar Entity diretamente.
 
 ---
 
-# 3. Cascade
+# 4. Cascade
 
 Não usar:
 
@@ -58,21 +96,23 @@ Não usar:
 cascade = CascadeType.ALL
 ```
 
-sem motivo.
+sem justificativa explícita.
 
-Pergunta antes de adicionar cascade:
+Pergunta obrigatória:
 
-> se eu salvar/apagar A, B deve ser automaticamente salvo/apagado?
+> Se eu salvar/remover A, B deve realmente ser salvo/removido automaticamente como parte do mesmo ciclo de vida?
 
-Na maioria das relações do AkosMed:
+Na maior parte do AkosMed:
 
 ```text
 NÃO
 ```
 
+Histórico clínico exige cuidado adicional.
+
 ---
 
-# 4. Relação Tenant → Unidade
+# 5. Tenant → Unidade
 
 ```text
 Tenant 1:N Unidade
@@ -80,109 +120,160 @@ Tenant 1:N Unidade
 
 Implementação prática:
 
-`Unidade` possui FK para Tenant.
-
-Não é obrigatório Tenant possuir `List<Unidade>`.
-
-Para simplificar, pode manter relação unidirecional:
-
-```java
-Unidade -> Tenant
+```text
+Unidade → Tenant
 ```
 
-Isso reduz coleções e ciclos.
+Não é obrigatório `Tenant` possuir `List<Unidade>`.
 
-Cascade recomendado:
+Cascade:
 
 ```text
 nenhum
 ```
 
-Nunca apagar Tenant e automaticamente apagar histórico.
+Nunca apagar Tenant e automaticamente apagar dados clínicos/históricos.
 
 ---
 
-# 5. Pessoa
+# 6. Pessoa
 
 ```text
-Pessoa -> Tenant
+Pessoa → Tenant
 ```
 
-Pessoa tenant-scoped.
+Tenant-scoped.
 
 Sem cascade para Tenant.
 
+Uma Pessoa pode ser referenciada por Paciente/Profissional/UsuarioTenant conforme regras do domínio.
+
 ---
 
-# 6. UsuarioTenant
+# 7. Usuario
+
+`Usuario` é credencial global.
+
+Não pertence diretamente a um Tenant.
+
+Relação com organização ocorre por:
 
 ```text
-UsuarioTenant -> Usuario
-UsuarioTenant -> Tenant
-UsuarioTenant -> Pessoa
+UsuarioTenant
 ```
 
-Todos `ManyToOne LAZY`.
+Não mapear automaticamente coleções gigantes de vínculos se não houver necessidade de navegação.
+
+---
+
+# 8. UsuarioTenant
+
+```text
+UsuarioTenant → Usuario
+UsuarioTenant → Tenant
+UsuarioTenant → Pessoa
+```
+
+To-one LAZY.
+
+Sem cascade por conveniência.
+
+Service cria/resolve objetos na ordem correta e valida que `Pessoa` pertence ao mesmo Tenant do vínculo.
+
+Constraints canônicas devem ser consultadas em `04_ENTIDADES_E_RELACIONAMENTOS.md`.
+
+---
+
+# 9. UsuarioUnidade
+
+```text
+UsuarioUnidade → UsuarioTenant
+UsuarioUnidade → Unidade
+```
 
 Sem cascade.
 
-Service cria os objetos na ordem correta.
+Service valida:
+
+```text
+UsuarioTenant.tenant == Unidade.tenant
+```
+
+Não aceitar `unidadeId Long` do cliente; API usa `unidadePublicId`.
 
 ---
 
-# 7. UsuarioUnidade
+# 10. RefreshToken
+
+Relações planejadas:
 
 ```text
-UsuarioUnidade -> UsuarioTenant
-UsuarioUnidade -> Unidade
+RefreshToken → Usuario
+RefreshToken → UsuarioTenant nullable
 ```
 
-Sem cascade.
+Para sessão tenant-scoped comum, a lógica exige `UsuarioTenant`.
 
-Service valida mesmo tenant.
+Nullable existe apenas para possível sessão administrativa global de superAdmin conforme modelo canônico.
+
+Sem cascade destrutivo.
 
 ---
 
-# 8. ProfissionalSaude
+# 11. Especialidade e Procedimento
+
+Ambas são tenant-scoped:
 
 ```text
-ProfissionalSaude -> Tenant
-ProfissionalSaude -> Pessoa
+Especialidade → Tenant
+Procedimento → Tenant
 ```
 
-One-to-one lógico com Pessoa, mas pode ser modelado `ManyToOne` com unique constraint ou `OneToOne`.
+Sem cascade para Tenant.
 
-Recomendação prática:
-
-```java
-@OneToOne(fetch = LAZY)
-@JoinColumn(unique = true)
-```
-
-se uma Pessoa só puder ter um ProfissionalSaude por tenant.
+Vínculos com Profissional são Entities próprias.
 
 ---
 
-# 9. Paciente
+# 12. ProfissionalSaude
 
 ```text
-Paciente -> Tenant
-Paciente -> Pessoa
+ProfissionalSaude → Tenant
+ProfissionalSaude → Pessoa
 ```
 
-Também relação lógica 1:1 com Pessoa.
+Relação lógica 1:1 entre Pessoa e Profissional dentro do Tenant.
 
-Se a mesma Pessoa só pode ter um Paciente por tenant:
+Pode ser modelada com `@OneToOne(fetch = LAZY)` e unique constraint, desde que compatível com o modelo/DDL definitivo.
 
-constraint unique em `pessoa_id`.
+Sem cascade para Pessoa/Tenant por conveniência.
 
 ---
 
-# 10. ProfissionalEspecialidade
+# 13. Paciente
 
 ```text
-ProfissionalEspecialidade -> ProfissionalSaude
-ProfissionalEspecialidade -> Especialidade
+Paciente → Tenant
+Paciente → Pessoa
+```
+
+Também é relação lógica 1:1 por Tenant.
+
+Constraint canônica:
+
+```text
+unique(tenant_id, pessoa_id)
+```
+
+Sem cascade destrutivo.
+
+---
+
+# 14. ProfissionalEspecialidade
+
+```text
+ProfissionalEspecialidade → ProfissionalSaude
+ProfissionalEspecialidade → Especialidade
 ```
 
 Constraint:
@@ -193,13 +284,15 @@ unique(profissional_id, especialidade_id)
 
 Sem cascade.
 
+Service valida mesmo Tenant.
+
 ---
 
-# 11. ProfissionalUnidade
+# 15. ProfissionalUnidade
 
 ```text
-ProfissionalUnidade -> ProfissionalSaude
-ProfissionalUnidade -> Unidade
+ProfissionalUnidade → ProfissionalSaude
+ProfissionalUnidade → Unidade
 ```
 
 Constraint:
@@ -208,13 +301,17 @@ Constraint:
 unique(profissional_id, unidade_id)
 ```
 
+Sem cascade.
+
+O vínculo ativo é pré-condição para agenda naquela Unidade.
+
 ---
 
-# 12. ProfissionalProcedimento
+# 16. ProfissionalProcedimento
 
 ```text
-ProfissionalProcedimento -> ProfissionalSaude
-ProfissionalProcedimento -> Procedimento
+ProfissionalProcedimento → ProfissionalSaude
+ProfissionalProcedimento → Procedimento
 ```
 
 Constraint:
@@ -223,74 +320,104 @@ Constraint:
 unique(profissional_id, procedimento_id)
 ```
 
+Sem cascade.
+
+Campos próprios como duração/valor override justificam não usar ManyToMany.
+
 ---
 
-# 13. DisponibilidadeProfissional
+# 17. DisponibilidadeProfissional
 
 ```text
 DisponibilidadeProfissional
- -> ProfissionalSaude
- -> Unidade
- -> Tenant
+→ Tenant
+→ ProfissionalSaude
+→ Unidade
 ```
 
-`tenant_id` pode parecer redundante, mas ajuda isolamento e queries.
+`tenant_id` pode parecer redundante, mas é intencional para isolamento/queries.
 
-Se mantido, Service deve garantir consistência entre os FKs.
-
----
-
-# 14. Agendamento
+Service deve garantir:
 
 ```text
-Agendamento
- -> Tenant
- -> Unidade
- -> Paciente
- -> ProfissionalSaude
- -> Procedimento
- -> Usuario (criadoPor)
+Disponibilidade.tenant
+== Profissional.tenant
+== Unidade.tenant
 ```
 
 Sem cascade.
 
-Agendamento não deve criar automaticamente Paciente/Profissional.
+---
+
+# 18. BloqueioAgenda
+
+```text
+BloqueioAgenda
+→ Tenant
+→ ProfissionalSaude
+→ Unidade
+→ Usuario criadoPor, quando modelado como relação
+```
+
+No MVP, Unidade é obrigatória.
+
+Sem cascade.
+
+Inativar/cancelar conforme regra; não remover histórico por cascade.
 
 ---
 
-# 15. EventoAgendamento
+# 19. Agendamento
 
 ```text
-EventoAgendamento -> Agendamento
+Agendamento
+→ Tenant
+→ Unidade
+→ Paciente
+→ ProfissionalSaude
+→ Procedimento
+→ Usuario criadoPor
 ```
 
-Aqui pode existir:
+Sem cascade.
 
-```text
-Agendamento 1:N EventoAgendamento
-```
+Agendamento não cria automaticamente Paciente/Profissional/Procedimento/Unidade.
 
-Mas não é obrigatório mapear coleção no Agendamento.
+Service resolve cada `publicId` tenant-scoped.
 
-Recomendação prática:
-
-manter apenas:
-
-```text
-EventoAgendamento -> Agendamento
-```
-
-e consultar via Repository.
-
-Evita carregar histórico acidentalmente.
+Concorrência não é resolvida por cascade/relacionamento; consultar `21_PUBLIC_ID_E_CONCORRENCIA.md`.
 
 ---
 
-# 16. Prontuario
+# 20. EventoAgendamento
 
 ```text
-Prontuario -> Tenant
-Prontuario -> Paciente
+EventoAgendamento → Tenant
+EventoAgendamento → Agendamento
+EventoAgendamento → Usuario nullable
+```
+
+Histórico append-only.
+
+Não é obrigatório mapear:
+
+```text
+Agendamento.getEventos()
+```
+
+Preferir consultar via Repository para evitar carregar histórico acidentalmente.
+
+Sem orphanRemoval.
+
+Sem cascade remove.
+
+---
+
+# 21. Prontuario
+
+```text
+Prontuario → Tenant
+Prontuario → Paciente
 ```
 
 Constraint:
@@ -301,179 +428,284 @@ unique(tenant_id, paciente_id)
 
 Sem cascade destrutivo.
 
+Paciente não apaga Prontuário automaticamente.
+
 ---
 
-# 17. Atendimento
+# 22. Atendimento
 
 ```text
 Atendimento
- -> Tenant
- -> Prontuario
- -> Unidade
- -> ProfissionalSaude
- -> Agendamento nullable
+→ Tenant
+→ Prontuario
+→ Unidade
+→ ProfissionalSaude
+→ Agendamento nullable
 ```
 
 Sem cascade.
 
-Agendamento pode ser null.
+Não duplicar `Paciente` em Atendimento; ele é derivado:
 
-Não duplicar `Paciente` dentro de Atendimento; ele vem de `Prontuario`.
+```text
+Atendimento → Prontuario → Paciente
+```
 
-Quando `agendamento_id` existir, considerar constraint UNIQUE para impedir dois atendimentos derivados do mesmo agendamento.
+Quando `agendamento_id` existir, considerar/usar constraint UNIQUE conforme decisão canônica para impedir dois Atendimentos derivados do mesmo Agendamento.
 
 ---
 
-# 18. EvolucaoClinica
+# 23. EvolucaoClinica
 
 ```text
 EvolucaoClinica
- -> Tenant
- -> Atendimento
- -> ProfissionalSaude
- -> EvolucaoClinica retificacaoDe nullable
+→ Tenant
+→ Atendimento
+→ ProfissionalSaude
+→ EvolucaoClinica retificacaoDe nullable
 ```
 
 Self-reference LAZY.
 
-Não usar orphanRemoval.
+Sem orphanRemoval.
+
+Sem cascade remove.
+
+Retificação cria novo registro; original permanece.
 
 ---
 
-# 19. Prescricao
+# 24. Prescricao
 
 ```text
 Prescricao
- -> Tenant
- -> Atendimento
- -> ProfissionalSaude
+→ Tenant
+→ Atendimento
+→ ProfissionalSaude
 ```
 
-Não duplicar `Paciente` em Prescricao; ele é derivado do Atendimento/Prontuario.
+Não duplicar Paciente; derivar:
 
-Uma prescrição possui itens.
-
-Aqui existe um caso onde cascade pode ser útil.
-
-Se o aggregate for controlado somente por Prescricao:
-
-```java
-@OneToMany(
-    mappedBy = "prescricao",
-    cascade = CascadeType.ALL,
-    orphanRemoval = true
-)
+```text
+Prescricao → Atendimento → Prontuario → Paciente
 ```
 
-**somente enquanto RASCUNHO**.
+Uma Prescrição possui itens.
 
-Mas isso exige cuidado após emissão.
+Embora cascade/orphanRemoval possa parecer conveniente enquanto RASCUNHO, o projeto prefere inicialmente salvar/remover `ItemPrescricao` explicitamente pelo Service para manter o ciclo de vida claro.
 
-Alternativa mais simples e segura:
-
-- ItemPrescricao possui FK Prescricao;
-- Service salva/remove itens explicitamente;
-- sem cascade.
-
-Para o MVP, preferir **salvar explicitamente**.
+Não usar cascade destrutivo depois da emissão.
 
 ---
 
-# 20. AnexoClinico
+# 25. ItemPrescricao
 
 ```text
-AnexoClinico -> Tenant
-AnexoClinico -> Prontuario
-AnexoClinico -> Atendimento nullable
+ItemPrescricao → Prescricao
 ```
 
-Não duplicar `Paciente` em AnexoClinico; ele é derivado do Prontuario.
+Sem necessidade de relação reversa se o código puder consultar via Repository.
+
+Enquanto RASCUNHO:
+
+- adicionar;
+- editar;
+- remover.
+
+Depois de EMITIDA, o ciclo de vida fica protegido pela regra de Prescrição.
+
+---
+
+# 26. AnexoClinico
+
+```text
+AnexoClinico
+→ Tenant
+→ Prontuario
+→ Atendimento nullable
+→ Usuario uploadedBy, conforme modelo
+```
+
+Não duplicar Paciente; derivar do Prontuário.
 
 Sem cascade.
 
-Excluir metadata não deve apagar Prontuario.
+Excluir/inativar metadata nunca remove Prontuário/Atendimento.
 
-Storage é tratado pelo Service.
+Arquivo real é tratado pelo `StorageService`, fora do banco.
 
 ---
 
-# 21. Notificacao
+# 27. Notificacao
 
-Pode referenciar:
+Modelo canônico do Core:
 
 ```text
-tenantId
-usuarioId
+Notificacao
+→ Tenant
+→ UsuarioTenant
 ```
 
-Recomendação:
+Campos operacionais incluem:
 
-relacionamento leve ou IDs.
+```text
+categoria
+titulo
+mensagem
+lida
+createdAt
+lidaEm
+```
 
-Como é operacional, usar IDs pode reduzir acoplamento.
+Essa relação deixa explícito que a notificação pertence ao contexto de um usuário dentro de um Tenant.
+
+Não modelar automaticamente com `usuarioId` global se isso perder o contexto do Tenant.
+
+Sem cascade.
+
+Endpoints `/me` resolvem `UsuarioTenant` pelo contexto autenticado.
 
 ---
 
-# 22. AuditLog
+# 28. AuditLog
 
-Preferir IDs primitivos:
+Aqui a decisão é diferente de um agregado de domínio.
+
+Preferir IDs primitivos/valores simples:
 
 ```text
 tenantId
-usuarioId
 unidadeId
+usuarioId
+usuarioTenantId
 recursoId
 ```
 
-Não mapear dezenas de relações.
+Esses são **IDs internos persistidos na auditoria**, não contrato externo HTTP.
 
-AuditLog precisa sobreviver à evolução do domínio.
+Não mapear dezenas de relações JPA.
+
+Motivo:
+
+- reduzir acoplamento;
+- manter histórico mesmo após evolução da modelagem;
+- evitar carregamento de grafos;
+- preservar auditoria quando recursos mudarem de estado.
+
+AuditLog pode armazenar `correlationId` quando aplicável.
 
 ---
 
-# 23. Bidirecionalidade
+# 29. OrientacaoPaciente — pós-MVP
 
-Só criar relação bidirecional quando o código realmente precisar navegar nos dois sentidos.
+Não implementar durante o Core.
 
-Exemplo desnecessário:
+Quando a ETAPA 15 chegar:
+
+```text
+OrientacaoPaciente
+→ Tenant
+→ Paciente
+→ ProfissionalSaude
+→ Atendimento nullable
+```
+
+Sem cascade destrutivo.
+
+Service valida:
+
+```text
+mesmo Tenant
++
+Atendimento compatível quando informado
++
+autorização
+```
+
+Arquivo/mídia é acessado por `StorageService`; não há relacionamento JPA com binário.
+
+Detalhes: `13_APPS_ASSISTENTES_E_PRESCRICOES.md`.
+
+---
+
+# 30. Bidirecionalidade
+
+Só criar relação bidirecional quando o código realmente precisa navegar nos dois sentidos.
+
+Evitar coleções como:
 
 ```text
 Tenant.getTodasAsPessoas()
+Paciente.getTodosAgendamentos()
+Prontuario.getTodosAtendimentos()
+Profissional.getTodosAgendamentos()
 ```
 
-Isso pode gerar coleções enormes.
+quando Repository resolve melhor.
 
-Preferir Repository.
+Benefícios:
 
----
-
-# 24. orphanRemoval
-
-Usar somente quando filho não faz sentido sem pai.
-
-Mesmo assim, revisar impacto.
-
-Não usar em:
-
-- atendimento;
-- evolução;
-- agendamento;
-- evento;
-- audit log;
-- prontuário.
+- menos ciclos;
+- menos N+1 acidental;
+- menos coleções gigantes;
+- menos risco de serialização recursiva;
+- modelo mais simples.
 
 ---
 
-# 25. Checklist JPA
+# 31. orphanRemoval
+
+Usar somente quando o filho não faz sentido sem o pai **e** a remoção física é compatível com o domínio.
+
+Não usar em histórico:
+
+- Agendamento;
+- EventoAgendamento;
+- Atendimento;
+- EvolucaoClinica;
+- Prontuario;
+- Prescricao emitida;
+- AuditLog.
+
+Para itens de rascunho, ainda preferir controle explícito inicialmente.
+
+---
+
+# 32. `@Version`
+
+`@Version` não é relacionamento/cascade, mas deve ser avaliado junto da Entity mutável.
+
+Candidatas estão em `22_CONCORRENCIA_IDEMPOTENCIA_CLOCK_OPERACAO.md`.
+
+Não aplicar por reflexo em históricos append-only.
+
+---
+
+# 33. Checklist JPA
 
 Antes de concluir um relacionamento:
 
-- [ ] quem possui FK?
+- [ ] quem possui a FK?
+- [ ] `publicId` continua apenas contrato externo?
+- [ ] Tenant de todos os lados foi validado?
 - [ ] relação precisa ser bidirecional?
 - [ ] fetch está LAZY?
 - [ ] cascade é realmente necessário?
 - [ ] orphanRemoval é seguro?
-- [ ] há unique constraint lógica?
-- [ ] Service valida mesmo tenant?
-- [ ] JSON não vai serializar Entity?
+- [ ] existe unique constraint lógica?
+- [ ] Service resolve relações por `publicId + Tenant`?
+- [ ] JSON não serializa Entity?
 - [ ] delete do pai não apaga histórico?
+- [ ] `@Version` foi avaliado quando aplicável?
+
+---
+
+# Regra final
+
+```text
+DTO/URL → UUID publicId
+Service → resolve Tenant e relacionamentos
+JPA/FK → Long id interno
+Cascade → somente quando ciclo de vida justificar
+Histórico → preservado
+```
