@@ -1,12 +1,17 @@
 # 12 — Visão Futura do Produto
 
-## Marca
+> Este arquivo registra direção de produto **sem alterar o Core nem antecipar implementação**.  
+> Ordem oficial: `11_ROADMAP_ETAPAS.md`. Estado real: `CONTINUIDADE.md`.
+
+---
+
+# Marca
 
 Nome definido:
 
 # AkosMed
 
-Estrutura possível:
+Ecossistema possível:
 
 ```text
 AkosMed
@@ -20,10 +25,10 @@ AkosMed
 └── Akos Enterprise
 ```
 
-Repositório:
+Backend oficial:
 
 ```text
-akosmed-backend
+gbsalermo/AkosMed-BackEnd
 ```
 
 Package:
@@ -32,9 +37,109 @@ Package:
 br.com.akosmed
 ```
 
-Antes de uso comercial, validar disponibilidade de marca/domínio.
+Antes de uso comercial, validar disponibilidade de marca/domínio e requisitos legais/comerciais aplicáveis.
 
-## Akos Assistant
+---
+
+# Akos Core
+
+O Core deve permanecer genérico o suficiente para atender diferentes especialidades sem criar uma Entity diferente para cada profissão.
+
+Princípio:
+
+```text
+Core estável
++
+módulos opcionais
++
+interfaces específicas
+=
+produto extensível
+```
+
+Não transformar visão futura em complexidade antecipada no MVP.
+
+---
+
+# AkosMed Patient
+
+App planejado em:
+
+```text
+Kotlin / Android
+```
+
+Entra **depois do Backend MVP 1.0** e depois da API `/me` correspondente estar estável.
+
+## Primeiro corte
+
+- login;
+- próximas consultas;
+- detalhes de consulta;
+- prescrições;
+- notificações.
+
+## Evolução
+
+- horários disponíveis;
+- autoagendamento;
+- cancelamento/reagendamento;
+- documentos;
+- orientações do profissional;
+- vídeos/materiais terapêuticos;
+- solicitações administrativas.
+
+O app consome regras do backend; não mantém uma segunda implementação de agenda, Tenant ou prescrição.
+
+---
+
+# Orientações e vídeos do profissional
+
+Recurso planejado:
+
+```text
+OrientacaoPaciente
+```
+
+Caso inicial:
+
+```text
+Fisioterapeuta
+→ envia vídeo demonstrando exercício correto
+→ adiciona instruções
+→ Paciente visualiza no AkosMed Patient
+```
+
+Tipos previstos:
+
+```text
+VIDEO
+DOCUMENTO
+LINK
+TEXTO
+```
+
+A escolha por um conceito genérico permite atender depois:
+
+- fisioterapia;
+- pós-operatório;
+- fonoaudiologia;
+- enfermagem;
+- nutrição;
+- outras orientações de acompanhamento.
+
+Posição oficial:
+
+```text
+ETAPA 15 → API + OrientacaoPaciente
+ETAPA 16 → app Kotlin + visualização de orientações/vídeos
+```
+
+Detalhes: `13_APPS_ASSISTENTES_E_PRESCRICOES.md`.
+
+---
+
+# Akos Assistant
 
 Objetivo:
 
@@ -45,30 +150,28 @@ Objetivo:
 - pendências;
 - resumo diário.
 
-A vantagem de implementar primeiro como endpoints é poder usar a mesma lógica em:
+A primeira entrega útil não precisa ser um bot.
+
+O backend pode oferecer Services/endpoints de resumo consumidos por:
 
 - web;
 - mobile;
-- bot;
-- push.
+- push;
+- bot futuro.
 
-## AkosMed Patient
+Regra:
 
-App Kotlin/Android.
+```text
+interface/adapter não contém regra de negócio crítica
+```
 
-Funções futuras:
+Akos Assistant entra depois do app/API planejados no roadmap, salvo decisão futura oficialmente registrada.
 
-- próximas consultas;
-- agendamentos;
-- horários disponíveis;
-- prescrições;
-- documentos;
-- notificações;
-- contato administrativo.
+---
 
-## Lembretes de medicamento
+# Lembretes de medicamento
 
-A estrutura `ItemPrescricao` já permite calcular:
+A estrutura `ItemPrescricao` pode permitir derivar:
 
 - tratamento ativo;
 - data de término;
@@ -81,26 +184,81 @@ Futuro:
 - aviso de fim do tratamento;
 - adesão opcional.
 
-Não fazer isso antes da prescrição estar sólida.
+Não criar tabela de lembrete/horários antes da prescrição e da experiência mobile estarem estáveis.
 
-## Contato com clínica
+---
+
+# Contato com a clínica
 
 Preferir primeiro solicitações estruturadas.
 
-Chat em tempo real só vale se houver demanda.
+Exemplo futuro:
 
-## IA
+```text
+SolicitacaoPaciente
+- tipo
+- mensagem
+- status
+```
+
+Tipos possíveis:
+
+```text
+REAGENDAMENTO
+DOCUMENTO
+DUVIDA_ADMINISTRATIVA
+OUTRO
+```
+
+Chat em tempo real só entra com demanda concreta.
+
+---
+
+# IA
 
 Possíveis usos futuros:
 
 - resumo administrativo;
 - classificação de solicitações;
 - busca assistida;
-- apoio de documentação.
+- apoio à documentação;
+- apoio operacional não-autônomo.
 
-Não deixar IA decidir regras críticas do domínio nem substituir validações clínicas.
+Não deixar IA:
 
-## Enterprise
+- decidir regra crítica do domínio;
+- substituir autorização;
+- substituir validação clínica/profissional;
+- gravar alteração clínica sem fluxo/autorização definidos.
+
+---
+
+# Especializações
+
+Possíveis:
+
+```text
+Akos Dental
+Akos Psi
+Akos Vision
+```
+
+Devem reutilizar:
+
+```text
+Paciente
+ProfissionalSaude
+Prontuario
+Atendimento
+```
+
+Não duplicar o Core por especialidade.
+
+Uma especialização só entra com necessidade real, requisitos e etapa própria.
+
+---
+
+# Enterprise
 
 Possíveis recursos:
 
@@ -111,25 +269,46 @@ Possíveis recursos:
 - integrações corporativas;
 - limites/configurações próprias.
 
-Implementar apenas com cliente real exigindo.
-
+Implementar somente com necessidade comercial real.
 
 ---
 
-## Ordem futura preservada
+# Outros módulos futuros
 
-As ideias deste arquivo não alteram o Core.
+Possíveis:
 
-A prioridade continua:
+- financeiro clínico;
+- convênios;
+- estoque;
+- laboratório;
+- TISS;
+- RNDS;
+- assinatura digital;
+- integrações de mensagem;
+- SaaS billing.
+
+Critério de entrada definido em `09_MODULOS_OPCIONAIS.md`.
+
+---
+
+# Ordem futura preservada
+
+A visão deste arquivo não altera o roadmap.
+
+Prioridade atual:
 
 ```text
-Backend MVP
+Backend MVP 1.0
 ↓
-API paciente
+API do paciente + OrientacaoPaciente
 ↓
-Kotlin
+AkosMed Patient / Kotlin
 ↓
 Akos Assistant
 ↓
-Especializações/módulos
+Especializações
+↓
+Módulos adicionais/Enterprise
 ```
+
+Se essa ordem mudar, atualizar primeiro `CONTINUIDADE.md` e `11_ROADMAP_ETAPAS.md`.
